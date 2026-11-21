@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App & General -->
+    <string name="app_name">Eden Save Sync</string>
+    <string name="action_refresh">Actualizar</string>
+    <string name="action_settings">Ajustes</string>
+    <string name="settings_title">Ajustes</string>
+    <string name="action_back">Atrás</string>
+    <string name="action_save">Guardar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_close">Cerrar</string>
+
+    <!-- Settings & Automation -->
+    <string name="settings_automation_title">Automatización</string>
+    <string name="settings_scheduled_sync_title">Sincronización programada diaria</string>
+    <string name="settings_scheduled_sync_desc">Sincroniza automáticamente partidas pendientes una vez al día en segundo plano.</string>
+    <string name="settings_scheduled_time_title">Hora de sincronización</string>
+    <string name="settings_scheduled_time_dialog_title">Seleccionar hora de sincronización</string>
+    <string name="settings_scheduled_sync_notify">Notificar resultado de sincronización</string>
+    <string name="settings_scheduled_sync_notify_desc">Recibe una notificación cuando termine la sincronización programada.</string>
+    <string name="settings_about_title">Acerca de</string>
+    <string name="settings_version">Versión %1$s</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_name">Sincronización de partidas programada</string>
+    <string name="notification_channel_desc">Notifica el resultado de la sincronización de partidas en segundo plano.</string>
+    <string name="notification_sync_title_success">Eden Save Sync</string>
+    <string name="notification_sync_title_error">Eden Save Sync (Incidencias)</string>
+    <string name="notification_sync_body_changes">%1$d partidas subidas • %2$d descargadas</string>
+    <string name="notification_sync_body_up_to_date">Tus partidas están al día con Google Drive</string>
+    <string name="notification_sync_body_error">Sincronización finalizada con errores: %1$s</string>
+
+    <!-- Header & Device -->
+    <string name="device_name_change_description">Cambiar nombre del dispositivo</string>
+    <string name="dialog_device_name_title">Identificador de este dispositivo</string>
+    <string name="dialog_device_name_description">Este nombre aparecerá en las partidas subidas a Google Drive para saber desde qué dispositivo guardaste por última vez:</string>
+    <string name="chip_device_phone">Teléfono</string>
+    <string name="chip_device_handheld">Consola portátil</string>
+    <string name="chip_device_tablet">Tablet</string>
+    <string name="field_device_name">Nombre del dispositivo</string>
+
+    <!-- Setup Status Card -->
+    <string name="setup_eden_folder_title">Carpeta Eden</string>
+    <string name="setup_eden_folder_linked">Vinculada</string>
+    <string name="setup_eden_folder_unlinked">Toca para vincular</string>
+    <string name="setup_drive_title">Google Drive</string>
+    <string name="setup_drive_connected">Conectado</string>
+    <string name="setup_drive_disconnected">Toca para conectar</string>
+    <string name="setup_profile_detected">Perfil Switch local detectado: %1$s…%2$s (mapeo automático entre tus dispositivos)</string>
+
+    <!-- Hero Card -->
+    <string name="hero_title_syncing">Sincronizando partidas...</string>
+    <string name="hero_title_not_ready">Configura Eden y Google Drive para empezar</string>
+    <string name="hero_title_changes_ready">Cambios listos para sincronizar</string>
+    <string name="hero_title_up_to_date">Todas tus partidas están al día</string>
+    <string name="hero_title_ready_scan">Listo para escanear tus partidas</string>
+    <string name="hero_subtitle_not_ready">Vincula la carpeta nand/user/save y tu cuenta de Google Drive.</string>
+    <string name="hero_subtitle_changes">%1$d para subir a la nube • %2$d para descargar a este dispositivo</string>
+    <string name="hero_subtitle_up_to_date">Tus dispositivos tienen la partida más reciente de cada juego.</string>
+    <string name="hero_button_sync_changes">Sincronizar ahora (%1$d ⬆️ / %2$d ⬇️)</string>
+    <string name="hero_button_sync_all">Verificar y sincronizar con 1 toque</string>
+
+    <!-- Section Header & Empty State -->
+    <string name="section_detected_saves">Partidas detectadas (%1$d)</string>
+    <string name="status_scanning">Escaneando...</string>
+    <string name="empty_saves_title_has_folder">No se encontraron partidas guardadas todavía</string>
+    <string name="empty_saves_title_no_folder">Vincula la carpeta de datos de Eden</string>
+    <string name="empty_saves_desc_has_folder">Asegúrate de haber seleccionado la carpeta de Eden (nand/user/save) o conecta Google Drive para descargar tus partidas desde otro dispositivo.</string>
+    <string name="empty_saves_desc_no_folder">Selecciona la carpeta de guardados de Eden para empezar a sincronizar entre tus dispositivos Android.</string>
+    <string name="empty_saves_button">Seleccionar carpeta de Eden</string>
+
+    <!-- Game Item Card -->
+    <string name="badge_upload_recommended">⬆️ Local más reciente</string>
+    <string name="badge_download_recommended">⬇️ Nube más reciente</string>
+    <string name="badge_in_sync">✅ Sincronizado</string>
+    <string name="game_card_rename_description">Renombrar juego</string>
+    <string name="game_card_title_id">Title ID: %1$s</string>
+    <string name="game_card_local_header">📱 En %1$s</string>
+    <string name="game_card_cloud_header">☁️ En Google Drive</string>
+    <string name="game_card_no_local">Sin partida local</string>
+    <string name="game_card_no_remote">No subida aún</string>
+    <string name="game_card_remote_source">De: %1$s</string>
+    <string name="game_card_stats">%1$s • %2$d arch.</string>
+    <string name="game_card_action_upload">Subir</string>
+    <string name="game_card_action_download">Descargar</string>
+    <string name="game_card_action_restore_backup">Restaurar backup (%1$d)</string>
+
+    <!-- Eden Folder Setup Dialog -->
+    <string name="dialog_folder_title">Vincular carpeta de Eden (Android/data)</string>
+    <string name="dialog_folder_intro">Eden guarda tus partidas de Nintendo Switch en:\nAndroid/data/dev.eden.eden_emulator/files/nand/user/save</string>
+    <string name="dialog_folder_option_a_title">Opción A — Proveedor nativo de Eden (Recomendado en Android 14/15/16):</string>
+    <string name="dialog_folder_option_a_steps">1. Pulsa el botón de abajo.\n2. En el selector de archivos de Android, toca el menú lateral izquierdo (☰) y selecciona el icono «Eden».\n3. Entra en nand → user → save y pulsa «Usar esta carpeta».</string>
+    <string name="dialog_folder_option_a_button">Abrir proveedor de documentos de Eden</string>
+    <string name="dialog_folder_option_b_title">Opción B — Ruta directa Android/data (Consolas Android o carpeta personalizada):</string>
+    <string name="dialog_folder_option_b_desc">Abre directamente Android/data/dev.eden.eden_emulator/files/nand/user/save o tu carpeta de usuario de Eden.</string>
+    <string name="dialog_folder_option_b_button">Abrir carpeta Android/data o personalizada</string>
+
+    <!-- Drive Config Dialog -->
+    <string name="dialog_drive_title">Conectar Google Drive</string>
+    <string name="dialog_drive_oauth_intro">Pulsa el botón para elegir tu cuenta de Google en el navegador. La sesión quedará vinculada de forma permanente con renovación automática:</string>
+    <string name="dialog_drive_oauth_button">Iniciar sesión con Google</string>
+    <string name="dialog_drive_disconnect_button">Desconectar cuenta de Google Drive</string>
+
+    <!-- Rename Game Dialog -->
+    <string name="dialog_rename_title">Nombre del juego (%1$s)</string>
+    <string name="dialog_rename_label">Nombre personalizado</string>
+
+    <!-- Backup History Dialog -->
+    <string name="dialog_backup_title">Copias de seguridad (%1$s)</string>
+    <string name="dialog_backup_count">Se han guardado %1$d copias de seguridad locales en este dispositivo antes de sobrescribir.</string>
+    <string name="dialog_backup_info">La app retiene automáticamente los últimos 5 respaldos en formato ZIP en el almacenamiento seguro de la aplicación.</string>
+    <string name="dialog_backup_restore_button">Restaurar más reciente</string>
+
+    <!-- Formats & Misc -->
+    <string name="time_unknown">Desconocida</string>
+    <string name="switch_game_fallback">Juego de Switch (%1$s)</string>
+    <string name="bytes_b">%1$d B</string>
+    <string name="bytes_kb">%1$.1f KB</string>
+    <string name="bytes_mb">%1$.2f MB</string>
+
+    <!-- ViewModel Status & Toast Messages -->
+    <string name="msg_folder_linked">Carpeta de Eden vinculada correctamente.</string>
+    <string name="msg_credentials_saved">Credenciales de Google Drive guardadas.</string>
+    <string name="msg_waiting_browser_auth">Esperando autorización de Google en el navegador...</string>
+    <string name="msg_drive_connected">¡Cuenta de Google Drive conectada con éxito!</string>
+    <string name="msg_drive_auth_error">Error al autorizar Google Drive</string>
+    <string name="msg_pairing_imported">Vinculación importada correctamente. Ambos dispositivos comparten Google Drive.</string>
+    <string name="msg_pairing_invalid">El código de vinculación no es válido.</string>
+    <string name="msg_drive_disconnected">Cuenta de Google Drive desconectada.</string>
+    <string name="msg_link_folder_first">Primero vincula la carpeta de guardados de Eden.</string>
+    <string name="msg_connect_drive_first">Primero conecta tu cuenta de Google Drive.</string>
+    <string name="msg_sync_starting">Iniciando sincronización...</string>
+    <string name="msg_all_in_sync">¡Todo está al día! Tus partidas ya están sincronizadas entre ambos dispositivos.</string>
+    <string name="msg_sync_completed">Sincronización completada: %1$d subidas, %2$d descargadas.</string>
+    <string name="msg_sync_completed_warnings">Completado con avisos (%1$d subidas, %2$d descargadas). Error: %3$s</string>
+    <string name="msg_uploading_game">Subiendo %1$s a Google Drive...</string>
+    <string name="msg_game_uploaded">Partida de %1$s subida a Google Drive.</string>
+    <string name="msg_upload_error">Error al subir: %1$s</string>
+    <string name="msg_downloading_game">Descargando %1$s (creando backup previo)...</string>
+    <string name="msg_game_downloaded">Partida de %1$s descargada en este dispositivo.</string>
+    <string name="msg_download_error">Error al descargar: %1$s</string>
+    <string name="msg_restoring_backup">Restaurando copia de seguridad local de %1$s...</string>
+    <string name="msg_backup_restored">Copia de seguridad local de %1$s restaurada.</string>
+    <string name="msg_backup_restore_error">No se pudo restaurar la copia de seguridad: %1$s</string>
+    <string name="msg_scan_error">Error escaneando partidas</string>
+    <string name="msg_sync_error">Error en sincronización</string>
+</resources>

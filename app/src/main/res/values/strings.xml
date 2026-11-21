@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App & General -->
+    <string name="app_name">Eden Save Sync</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_settings">Settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="action_back">Back</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+
+    <!-- Settings & Automation -->
+    <string name="settings_automation_title">Automation</string>
+    <string name="settings_scheduled_sync_title">Scheduled Daily Sync</string>
+    <string name="settings_scheduled_sync_desc">Automatically syncs pending saves once a day in the background.</string>
+    <string name="settings_scheduled_time_title">Sync Time</string>
+    <string name="settings_scheduled_time_dialog_title">Select Sync Time</string>
+    <string name="settings_scheduled_sync_notify">Notify sync result</string>
+    <string name="settings_scheduled_sync_notify_desc">Receive a notification when the scheduled sync completes.</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_version">Version %1$s</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_name">Scheduled Save Sync</string>
+    <string name="notification_channel_desc">Notifies the result of scheduled background save syncs.</string>
+    <string name="notification_sync_title_success">Eden Save Sync</string>
+    <string name="notification_sync_title_error">Eden Save Sync (Issues)</string>
+    <string name="notification_sync_body_changes">%1$d saves uploaded • %2$d downloaded</string>
+    <string name="notification_sync_body_up_to_date">Saves are up to date with Google Drive</string>
+    <string name="notification_sync_body_error">Sync completed with issues: %1$s</string>
+
+    <!-- Header & Device -->
+    <string name="device_name_change_description">Change device name</string>
+    <string name="dialog_device_name_title">Device Identifier</string>
+    <string name="dialog_device_name_description">This name will appear on saves uploaded to Google Drive to track which device last saved:</string>
+    <string name="chip_device_phone">Phone</string>
+    <string name="chip_device_handheld">Handheld</string>
+    <string name="chip_device_tablet">Tablet</string>
+    <string name="field_device_name">Device name</string>
+
+    <!-- Setup Status Card -->
+    <string name="setup_eden_folder_title">Eden Folder</string>
+    <string name="setup_eden_folder_linked">Linked</string>
+    <string name="setup_eden_folder_unlinked">Tap to link</string>
+    <string name="setup_drive_title">Google Drive</string>
+    <string name="setup_drive_connected">Connected</string>
+    <string name="setup_drive_disconnected">Tap to connect</string>
+    <string name="setup_profile_detected">Local Switch profile detected: %1$s…%2$s (auto-mapped across your devices)</string>
+
+    <!-- Hero Card -->
+    <string name="hero_title_syncing">Syncing saves...</string>
+    <string name="hero_title_not_ready">Configure Eden and Google Drive to get started</string>
+    <string name="hero_title_changes_ready">Changes ready to sync</string>
+    <string name="hero_title_up_to_date">All saves up to date</string>
+    <string name="hero_title_ready_scan">Ready to scan your saves</string>
+    <string name="hero_subtitle_not_ready">Link your nand/user/save folder and your Google Drive account.</string>
+    <string name="hero_subtitle_changes">%1$d to upload to cloud • %2$d to download to this device</string>
+    <string name="hero_subtitle_up_to_date">Your devices have the latest save for every game.</string>
+    <string name="hero_button_sync_changes">Sync now (%1$d ⬆️ / %2$d ⬇️)</string>
+    <string name="hero_button_sync_all">Check and sync with 1 tap</string>
+
+    <!-- Section Header & Empty State -->
+    <string name="section_detected_saves">Detected saves (%1$d)</string>
+    <string name="status_scanning">Scanning...</string>
+    <string name="empty_saves_title_has_folder">No saved games found yet</string>
+    <string name="empty_saves_title_no_folder">Link Eden data folder</string>
+    <string name="empty_saves_desc_has_folder">Make sure you selected the Eden folder (nand/user/save) or connect Google Drive to download your saves from another device.</string>
+    <string name="empty_saves_desc_no_folder">Select your Eden saves folder to start syncing across your Android devices.</string>
+    <string name="empty_saves_button">Select Eden folder</string>
+
+    <!-- Game Item Card -->
+    <string name="badge_upload_recommended">⬆️ Local newer</string>
+    <string name="badge_download_recommended">⬇️ Cloud newer</string>
+    <string name="badge_in_sync">✅ In sync</string>
+    <string name="game_card_rename_description">Rename game</string>
+    <string name="game_card_title_id">Title ID: %1$s</string>
+    <string name="game_card_local_header">📱 On %1$s</string>
+    <string name="game_card_cloud_header">☁️ On Google Drive</string>
+    <string name="game_card_no_local">No local save</string>
+    <string name="game_card_no_remote">Not uploaded yet</string>
+    <string name="game_card_remote_source">From: %1$s</string>
+    <string name="game_card_stats">%1$s • %2$d files</string>
+    <string name="game_card_action_upload">Upload</string>
+    <string name="game_card_action_download">Download</string>
+    <string name="game_card_action_restore_backup">Restore backup (%1$d)</string>
+
+    <!-- Eden Folder Setup Dialog -->
+    <string name="dialog_folder_title">Link Eden Folder (Android/data)</string>
+    <string name="dialog_folder_intro">Eden saves your Nintendo Switch games in:\nAndroid/data/dev.eden.eden_emulator/files/nand/user/save</string>
+    <string name="dialog_folder_option_a_title">Option A — Native Eden Provider (Recommended on Android 14/15/16):</string>
+    <string name="dialog_folder_option_a_steps">1. Tap the button below.\n2. In the Android file picker, open the left drawer (☰) and select the «Eden» icon.\n3. Navigate to nand → user → save and tap «Use this folder».</string>
+    <string name="dialog_folder_option_a_button">Open Eden Documents Provider</string>
+    <string name="dialog_folder_option_b_title">Option B — Direct Android/data path (Handhelds or custom folder):</string>
+    <string name="dialog_folder_option_b_desc">Directly open Android/data/dev.eden.eden_emulator/files/nand/user/save or your Eden user folder.</string>
+    <string name="dialog_folder_option_b_button">Open Android/data or custom folder</string>
+
+    <!-- Drive Config Dialog -->
+    <string name="dialog_drive_title">Connect Google Drive</string>
+    <string name="dialog_drive_oauth_intro">Tap the button to choose your Google account in your browser. The session will remain permanently connected with automatic renewal:</string>
+    <string name="dialog_drive_oauth_button">Sign in with Google</string>
+    <string name="dialog_drive_disconnect_button">Disconnect Google Drive account</string>
+
+    <!-- Rename Game Dialog -->
+    <string name="dialog_rename_title">Game Name (%1$s)</string>
+    <string name="dialog_rename_label">Custom name</string>
+
+    <!-- Backup History Dialog -->
+    <string name="dialog_backup_title">Backups (%1$s)</string>
+    <string name="dialog_backup_count">%1$d local backups saved on this device before overwriting.</string>
+    <string name="dialog_backup_info">The app automatically retains the last 5 backups as ZIP files in secure app storage.</string>
+    <string name="dialog_backup_restore_button">Restore latest</string>
+
+    <!-- Formats & Misc -->
+    <string name="time_unknown">Unknown</string>
+    <string name="switch_game_fallback">Switch Game (%1$s)</string>
+    <string name="bytes_b">%1$d B</string>
+    <string name="bytes_kb">%1$.1f KB</string>
+    <string name="bytes_mb">%1$.2f MB</string>
+
+    <!-- ViewModel Status & Toast Messages -->
+    <string name="msg_folder_linked">Eden folder linked successfully.</string>
+    <string name="msg_credentials_saved">Google Drive credentials saved.</string>
+    <string name="msg_waiting_browser_auth">Waiting for Google authorization in browser...</string>
+    <string name="msg_drive_connected">Google Drive account connected successfully!</string>
+    <string name="msg_drive_auth_error">Error authorizing Google Drive</string>
+    <string name="msg_pairing_imported">Pairing imported successfully. Both devices now share Google Drive.</string>
+    <string name="msg_pairing_invalid">The pairing code is invalid.</string>
+    <string name="msg_drive_disconnected">Google Drive account disconnected.</string>
+    <string name="msg_link_folder_first">Please link the Eden saves folder first.</string>
+    <string name="msg_connect_drive_first">Please connect your Google Drive account first.</string>
+    <string name="msg_sync_starting">Starting sync...</string>
+    <string name="msg_all_in_sync">All up to date! Your saves are already synchronized between both devices.</string>
+    <string name="msg_sync_completed">Sync completed: %1$d uploaded, %2$d downloaded.</string>
+    <string name="msg_sync_completed_warnings">Completed with warnings (%1$d uploaded, %2$d downloaded). Error: %3$s</string>
+    <string name="msg_uploading_game">Uploading %1$s to Google Drive...</string>
+    <string name="msg_game_uploaded">Save file for %1$s uploaded to Google Drive.</string>
+    <string name="msg_upload_error">Error uploading: %1$s</string>
+    <string name="msg_downloading_game">Downloading %1$s (creating safety backup)...</string>
+    <string name="msg_game_downloaded">Save file for %1$s downloaded to this device.</string>
+    <string name="msg_download_error">Error downloading: %1$s</string>
+    <string name="msg_restoring_backup">Restoring local backup for %1$s...</string>
+    <string name="msg_backup_restored">Local backup for %1$s restored.</string>
+    <string name="msg_backup_restore_error">Could not restore backup: %1$s</string>
+    <string name="msg_scan_error">Error scanning saves</string>
+    <string name="msg_sync_error">Sync error</string>
+</resources>
