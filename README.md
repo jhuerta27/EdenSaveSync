@@ -10,15 +10,9 @@ Empieza una partida en tu teléfono, tablet o consola portátil Android y contin
 
 ## 📸 Capturas de pantalla
 
-<!--
-Añade tus capturas en la carpeta `docs/screenshots/` y descomenta las líneas siguientes:
-
 | Pantalla principal | Sincronización en 1 toque | Ajustes y automatización |
 | :---: | :---: | :---: |
 | ![Pantalla principal](docs/screenshots/home.png) | ![Sincronización](docs/screenshots/sync.png) | ![Ajustes](docs/screenshots/settings.png) |
--->
-
-*Próximamente: capturas de la pantalla principal, sincronización con 1 toque y ajustes de sincronización diaria.*
 
 ---
 
@@ -63,64 +57,10 @@ Repite estos 3 pasos en tu otro dispositivo Android con la misma cuenta de Googl
 
 ---
 
-## 🛠️ Información para desarrolladores
-
-<details>
-<summary>Compilación local, GitHub Actions, catálogo de juegos y estructura del código</summary>
-
-### Requisitos de compilación
-- **Android**: API 26+ (Android 8.0 o superior).
-- **Java / JDK**: JDK 17 o superior.
-
-```bash
-# Compilar APK debug y ejecutar tests unitarios
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
-```
-
-El APK debug se genera en `app/build/outputs/apk/debug/app-debug.apk`.
-
-### GitHub Actions y firma de Releases (coste 0 €)
-El workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) se ejecuta en runners públicos gratuitos **`ubuntu-latest`** al publicar una Release, subir un tag `v*` o lanzarlo manualmente (`workflow_dispatch`).
-
-Para firmar las Releases con tu propio keystore (sin commitear ningún `.jks` al repositorio), configura estos 4 secretos en **Settings → Secrets and variables → Actions → Repository secrets**:
-
-| Secret | Descripción |
-| --- | --- |
-| `KEYSTORE_BASE64` | Archivo `.jks` / `.keystore` codificado en Base64 (`base64 -i release.jks \| tr -d '\n'`) |
-| `KEYSTORE_PASSWORD` | Contraseña del keystore |
-| `KEY_ALIAS` | Alias de la clave dentro del keystore |
-| `KEY_PASSWORD` | Contraseña de la clave |
-
-Si no se configuran estos secretos, el workflow usa la firma `debug` como fallback para que cualquier fork pueda compilar sin pasos extra.
+## 🛠️ Información adicional
 
 ### Catálogo de juegos
 La app incluye un catálogo offline empaquetado en [`catalog/titles.json`](catalog/titles.json) y se actualiza automáticamente desde un Gist público para reconocer nuevos Title IDs sin tener que actualizar el APK.
-
-### Estructura del código
-```
-app/src/main/java/com/jotasoft/edensavesync/
-├── MainActivity.kt              # Punto de entrada y callback OAuth
-├── core/di/                     # Inyección de dependencias con Hilt
-├── data/
-│   ├── catalog/                 # Catálogo de títulos (SwitchTitleCatalog)
-│   ├── cloud/                   # Cliente Google Drive REST v3 y OAuth 2.0 PKCE
-│   ├── device/                  # Detección de dispositivo y soporte de mando
-│   ├── notification/            # Notificaciones de sincronización programada
-│   ├── repository/              # Implementaciones de repositorios y reconciliación
-│   ├── scheduler/               # Sincronización diaria (AlarmManager + WorkManager)
-│   └── storage/                 # Gestor SAF de Eden (EdenStorageManager) y preferencias
-├── domain/
-│   ├── model/                   # Modelos de dominio
-│   ├── repository/              # Contratos de repositorios
-│   └── usecase/                 # Casos de uso
-└── presentation/
-    ├── settings/                # Pantalla de Ajustes y automatización
-    └── sync/                    # UI en Jetpack Compose y EdenSyncViewModel
-```
-
-</details>
-
----
 
 ## ⚠️ Aviso Legal
 
