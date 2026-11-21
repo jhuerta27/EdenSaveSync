@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eden Save Sync — Google Drive Save Sync for Eden on Android</title>
+  <meta name="description" content="Eden Save Sync is a free, open-source Android app that synchronizes Eden emulator save files across your Android devices using your own Google Drive account." />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    h1 {
+      font-size: 2.2rem;
+      margin: 0 0 12px;
+      color: var(--text);
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 1.1rem;
+      max-width: 640px;
+      margin: 0 auto 24px;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 22px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.98rem;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #0f172a;
+    }
+    .btn-secondary {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 1.3rem;
+      color: var(--accent);
+    }
+    ul {
+      padding-left: 20px;
+      margin: 0;
+    }
+    li { margin-bottom: 8px; }
+    a { color: var(--accent); }
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Eden Save Sync</h1>
+      <p class="subtitle">
+        Free, open-source Android application to synchronize your Eden emulator save files across all your Android devices using your own Google Drive account.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/jhuerta27/EdenSavesSync/releases">Download APK (GitHub Releases)</a>
+        <a class="btn btn-secondary" href="https://github.com/jhuerta27/EdenSavesSync">Source Code on GitHub</a>
+        <a class="btn btn-secondary" href="privacy.html">Privacy Policy</a>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>What Eden Save Sync Does</h2>
+      <ul>
+        <li><strong>Personal Google Drive Sync:</strong> Uploads and downloads your own savegame backups inside a dedicated <code>EdenSaveSync</code> folder in your personal Google Drive.</li>
+        <li><strong>Automatic Profile Mapping:</strong> Normalizes local emulator profile IDs so your saves work seamlessly across phones, tablets, foldables, and Android gaming handhelds.</li>
+        <li><strong>Smart Content Comparison:</strong> Uses SHA-256 hashing and real save timestamps to detect which device has the latest progress.</li>
+        <li><strong>Automatic Local Backups:</strong> Keeps the last 5 local ZIP backups per game before overwriting any local save.</li>
+        <li><strong>Scheduled Daily Sync:</strong> Optional background daily sync with system notifications.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Google Drive Access &amp; Privacy</h2>
+      <p>
+        Eden Save Sync requests only the minimal per-file Google Drive scope (<code>https://www.googleapis.com/auth/drive.file</code>).
+        This allows the app to access <strong>only</strong> the save backup files that Eden Save Sync itself creates in your Google Drive.
+        It cannot view, read, modify, or delete any other files in your Drive.
+      </p>
+      <p>
+        There are no developer servers, no analytics, and no personal data collection.
+        Read our full <a href="privacy.html">Privacy Policy</a> for complete details.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Legal Notice</h2>
+      <p>
+        Eden Save Sync is an independent, community-developed open-source tool with no affiliation with Nintendo Co., Ltd. or the Eden emulator team.
+        It does not include, host, or distribute ROMs, games, firmware, or cryptographic keys.
+      </p>
+    </section>
+
+    <footer>
+      <p>
+        <a href="privacy.html">Privacy Policy</a> ·
+        <a href="https://github.com/jhuerta27/EdenSavesSync">GitHub Repository</a> ·
+        <a href="https://github.com/jhuerta27/EdenSavesSync/blob/main/LICENSE">MIT License</a>
+      </p>
+    </footer>
+  </div>
+</body>
+</html>
