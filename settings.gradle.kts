@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "EdenSavesSync"
+rootProject.name = "EdenSaveSync"
 include(":app")

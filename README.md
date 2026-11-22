@@ -6,20 +6,16 @@ Empieza una partida en tu teléfono, tablet o consola portátil Android y contin
 
 > Compatible con cualquier teléfono, plegable, tablet o consola portátil Android (con soporte completo para pantalla táctil y mando/gamepad).
 
----
-
 ## 📸 Capturas de pantalla
 
 | Pantalla principal | Sincronización en 1 toque | Ajustes y automatización |
 | :---: | :---: | :---: |
 | ![Pantalla principal](docs/screenshots/home.png) | ![Sincronización](docs/screenshots/sync.png) | ![Ajustes](docs/screenshots/settings.png) |
 
----
-
 ## 🚀 Cómo empezar (en 3 pasos)
 
 ### 1. Descarga e instala la app
-1. Ve a la sección [**Releases**](https://github.com/jhuerta27/EdenSavesSync/releases) de este repositorio y descarga el último archivo `.apk`.
+1. Ve a la sección [**Releases**](https://github.com/jhuerta27/EdenSaveSync/releases) de este repositorio y descarga el último archivo `.apk`.
 2. Ábrelo en tu dispositivo Android para instalarlo *(requiere Android 8.0 o superior y tener el emulador **Eden** instalado)*.
 
 ### 2. Vincula tu carpeta de partidas de Eden
@@ -35,8 +31,6 @@ Empieza una partida en tu teléfono, tablet o consola portátil Android y contin
 
 Repite estos 3 pasos en tu otro dispositivo Android con la misma cuenta de Google y tus partidas quedarán siempre sincronizadas.
 
----
-
 ## ✨ Qué hace por ti
 
 - **☁️ Tu nube, tus partidas**: Guarda tus partidas comprimidas en una carpeta llamada `EdenSaveSync` dentro de **tu propio Google Drive**.
@@ -47,15 +41,11 @@ Repite estos 3 pasos en tu otro dispositivo Android con la misma cuenta de Googl
 - **🎮 Preparada para mando y pantalla táctil**: Navega cómodamente tanto con el dedo como con el D-pad / joysticks de tu consola portátil.
 - **📋 Nombres de juegos automáticos**: Reconoce los títulos automáticamente y además te permite renombrar cualquier juego a tu gusto.
 
----
-
 ## 🔒 Privacidad y seguridad
 
 - **Cada usuario usa su propia cuenta de Google Drive**: Nadie más tiene acceso a tus partidas ni hay ningún servidor intermedio.
 - **Permiso mínimo (`drive.file`)**: La app solo puede ver y gestionar los archivos que ella misma crea dentro de la carpeta `EdenSaveSync`; no puede leer ni tocar ningún otro archivo de tu Google Drive.
 - Consulta todos los detalles en nuestra [Política de Privacidad](PRIVACY.md).
-
----
 
 ## 🛠️ Catálogo de juegos
 
@@ -66,8 +56,6 @@ La app incluye un catálogo offline empaquetado en [`catalog/titles.json`](catal
 **Eden Save Sync** es una herramienta comunitaria de código abierto sin ninguna afiliación, patrocinio ni respaldo por parte de **Nintendo Co., Ltd.** ni del equipo de desarrollo del emulador **Eden**.
 
 Este proyecto **no incluye, aloja ni distribuye ROMs, juegos, firmware ni claves criptográficas**. Su único propósito es facilitar la copia de seguridad y sincronización de archivos de partidas guardadas propiedad del usuario entre sus propios dispositivos.
-
----
 
 ## 📄 Licencia
 
