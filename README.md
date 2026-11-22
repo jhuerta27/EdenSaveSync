@@ -49,7 +49,7 @@ Repite estos 3 pasos en tu otro dispositivo Android con la misma cuenta de Googl
 
 ## 🛠️ Catálogo de juegos
 
-La app incluye un catálogo offline empaquetado en [`catalog/titles.json`](catalog/titles.json) y se actualiza automáticamente desde un Gist público para reconocer nuevos Title IDs sin tener que actualizar el APK.
+La app incluye un catálogo offline empaquetado en [`app/src/main/assets/titles.json`](app/src/main/assets/titles.json) y se actualiza automáticamente desde este mismo archivo en el repositorio de GitHub para reconocer nuevos Title IDs sin tener que actualizar el APK.
 
 ## ⚠️ Aviso Legal
 

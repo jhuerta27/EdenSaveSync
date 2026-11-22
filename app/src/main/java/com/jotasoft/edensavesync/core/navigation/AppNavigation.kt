@@ -25,18 +25,14 @@ fun AppNavigation(
     viewModel: EdenSyncViewModel,
     onOpenEdenFolderIntent: (useEdenProvider: Boolean) -> Intent,
     onOpenBrowserAuthUrl: (String) -> Unit,
-    onRegisterStartButtonHandler: ((() -> Boolean)?) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRegisterStartButtonHandler: ((() -> Boolean)?) -> Unit = {}
 ) {
     var currentScreen by rememberSaveable { mutableStateOf<Screen>(Screen.Sync) }
 
     DisposableEffect(currentScreen) {
         onRegisterStartButtonHandler {
-            currentScreen = if (currentScreen == Screen.Sync) {
-                Screen.Settings
-            } else {
-                Screen.Sync
-            }
+            currentScreen = if (currentScreen == Screen.Sync) Screen.Settings else Screen.Sync
             true
         }
         onDispose {

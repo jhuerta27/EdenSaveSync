@@ -24,13 +24,11 @@ class ScanGamesUseCaseTest {
         )
         var profileIdToReturn = "00000001000000000000000000000000"
 
-        override suspend fun scanGames(): Pair<String, List<GameSyncItem>> {
-            return profileIdToReturn to gamesToReturn
-        }
+        override suspend fun scanGames(): Pair<String, List<GameSyncItem>> =
+            profileIdToReturn to gamesToReturn
 
-        override suspend fun syncAllRecommended(onProgress: (String) -> Unit): SyncSummaryResult {
-            return SyncSummaryResult(0, 0, 0, emptyList())
-        }
+        override suspend fun syncAllRecommended(onProgress: (String) -> Unit): SyncSummaryResult =
+            SyncSummaryResult(0, 0, 0, emptyList())
 
         override suspend fun uploadSingleGame(item: GameSyncItem): Result<Unit> = Result.success(Unit)
         override suspend fun downloadSingleGame(item: GameSyncItem): Result<Unit> = Result.success(Unit)

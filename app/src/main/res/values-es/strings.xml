@@ -2,7 +2,6 @@
 <resources>
     <!-- App & General -->
     <string name="app_name">Eden Save Sync</string>
-    <string name="action_refresh">Actualizar</string>
     <string name="action_settings">Ajustes</string>
     <string name="settings_title">Ajustes</string>
     <string name="action_back">Atrás</string>
@@ -105,12 +104,6 @@
     <string name="dialog_rename_title">Nombre del juego (%1$s)</string>
     <string name="dialog_rename_label">Nombre personalizado</string>
 
-    <!-- Backup History Dialog -->
-    <string name="dialog_backup_title">Copias de seguridad (%1$s)</string>
-    <string name="dialog_backup_count">Se han guardado %1$d copias de seguridad locales en este dispositivo antes de sobrescribir.</string>
-    <string name="dialog_backup_info">La app retiene automáticamente los últimos 5 respaldos en formato ZIP en el almacenamiento seguro de la aplicación.</string>
-    <string name="dialog_backup_restore_button">Restaurar más reciente</string>
-
     <!-- Formats & Misc -->
     <string name="time_unknown">Desconocida</string>
     <string name="switch_game_fallback">Juego de Switch (%1$s)</string>
@@ -120,12 +113,9 @@
 
     <!-- ViewModel Status & Toast Messages -->
     <string name="msg_folder_linked">Carpeta de Eden vinculada correctamente.</string>
-    <string name="msg_credentials_saved">Credenciales de Google Drive guardadas.</string>
     <string name="msg_waiting_browser_auth">Esperando autorización de Google en el navegador...</string>
     <string name="msg_drive_connected">¡Cuenta de Google Drive conectada con éxito!</string>
     <string name="msg_drive_auth_error">Error al autorizar Google Drive</string>
-    <string name="msg_pairing_imported">Vinculación importada correctamente. Ambos dispositivos comparten Google Drive.</string>
-    <string name="msg_pairing_invalid">El código de vinculación no es válido.</string>
     <string name="msg_drive_disconnected">Cuenta de Google Drive desconectada.</string>
     <string name="msg_link_folder_first">Primero vincula la carpeta de guardados de Eden.</string>
     <string name="msg_connect_drive_first">Primero conecta tu cuenta de Google Drive.</string>

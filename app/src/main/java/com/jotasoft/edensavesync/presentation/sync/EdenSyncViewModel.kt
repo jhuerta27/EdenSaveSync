@@ -9,7 +9,6 @@ import com.jotasoft.edensavesync.domain.repository.AuthRepository
 import com.jotasoft.edensavesync.domain.repository.EdenStorageRepository
 import com.jotasoft.edensavesync.domain.repository.SaveSyncRepository
 import com.jotasoft.edensavesync.domain.usecase.DownloadSaveGameUseCase
-import com.jotasoft.edensavesync.domain.usecase.PairingCodeUseCase
 import com.jotasoft.edensavesync.domain.usecase.RestoreBackupUseCase
 import com.jotasoft.edensavesync.domain.usecase.ScanGamesUseCase
 import com.jotasoft.edensavesync.domain.usecase.SyncAllRecommendedUseCase
@@ -30,7 +29,6 @@ class EdenSyncViewModel @Inject constructor(
     private val uploadSaveGameUseCase: UploadSaveGameUseCase,
     private val downloadSaveGameUseCase: DownloadSaveGameUseCase,
     private val restoreBackupUseCase: RestoreBackupUseCase,
-    private val pairingCodeUseCase: PairingCodeUseCase,
     private val authRepository: AuthRepository,
     private val storageRepository: EdenStorageRepository,
     private val saveSyncRepository: SaveSyncRepository
@@ -39,10 +37,8 @@ class EdenSyncViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         EdenSyncUiState(
             deviceName = authRepository.getDeviceName(),
-            edenFolderUri = storageRepository.getFolderUriString()?.let { Uri.parse(it) },
-            isGoogleDriveConnected = authRepository.isGoogleDriveConfigured(),
-            googleClientId = authRepository.getGoogleClientId(),
-            googleClientSecret = authRepository.getGoogleClientSecret()
+            edenFolderUri = storageRepository.getFolderUriString()?.let(Uri::parse),
+            isGoogleDriveConnected = authRepository.isGoogleDriveConfigured()
         )
     )
     val uiState: StateFlow<EdenSyncUiState> = _uiState.asStateFlow()
@@ -69,108 +65,19 @@ class EdenSyncViewModel @Inject constructor(
         _uiState.update { it.copy(deviceName = authRepository.getDeviceName()) }
     }
 
-    fun saveDirectDriveToken(
-        accessToken: String,
-        refreshToken: String,
-        clientId: String,
-        clientSecret: String
-    ) {
-        authRepository.saveDirectDriveToken(accessToken, refreshToken, clientId, clientSecret)
-        _uiState.update {
-            it.copy(
-                isGoogleDriveConnected = authRepository.isGoogleDriveConfigured(),
-                googleClientId = authRepository.getGoogleClientId(),
-                googleClientSecret = authRepository.getGoogleClientSecret(),
-                statusBannerMessage = StringResource(R.string.msg_credentials_saved),
-                isStatusError = false
-            )
-        }
-        refreshAll()
-    }
-
     fun onOAuthRedirect(uri: Uri) {
-        authRepository.handleOAuthRedirect(uri)
+        authRepository.handleOAuthRedirect(uri.toString())
     }
 
-    fun startBrowserOAuth(
-        onOpenUrl: (String) -> Unit
+    fun startBrowserOAuth(onOpenUrl: (String) -> Unit) = executeSyncAction(
+        progressMessage = StringResource(R.string.msg_waiting_browser_auth),
+        onSuccessMessage = { StringResource(R.string.msg_drive_connected) },
+        onErrorMessage = { err ->
+            err?.message?.let(StringResource::invoke) ?: StringResource(R.string.msg_drive_auth_error)
+        },
+        updateDriveStatusOnSuccess = true
     ) {
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isSyncing = true,
-                    syncProgressMessage = StringResource(R.string.msg_waiting_browser_auth),
-                    isStatusError = false
-                )
-            }
-            try {
-                val result = authRepository.startBrowserOAuth(onOpenUrl)
-                result.fold(
-                    onSuccess = {
-                        _uiState.update {
-                            it.copy(
-                                isSyncing = false,
-                                syncProgressMessage = null,
-                                isGoogleDriveConnected = authRepository.isGoogleDriveConfigured(),
-                                googleClientId = authRepository.getGoogleClientId(),
-                                googleClientSecret = authRepository.getGoogleClientSecret(),
-                                statusBannerMessage = StringResource(R.string.msg_drive_connected),
-                                isStatusError = false
-                            )
-                        }
-                        refreshAll()
-                    },
-                    onFailure = { err ->
-                        if (err is CancellationException) throw err
-                        _uiState.update {
-                            it.copy(
-                                isSyncing = false,
-                                syncProgressMessage = null,
-                                statusBannerMessage = err.message?.let { msg -> StringResource(msg) }
-                                    ?: StringResource(R.string.msg_drive_auth_error),
-                                isStatusError = true
-                            )
-                        }
-                    }
-                )
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        syncProgressMessage = null,
-                        statusBannerMessage = e.message?.let { msg -> StringResource(msg) }
-                            ?: StringResource(R.string.msg_drive_auth_error),
-                        isStatusError = true
-                    )
-                }
-            }
-        }
-    }
-
-    fun exportPairingCode(): String = pairingCodeUseCase.exportCode()
-
-    fun importPairingCode(code: String) {
-        val ok = pairingCodeUseCase.importCode(code)
-        if (ok) {
-            _uiState.update {
-                it.copy(
-                    isGoogleDriveConnected = authRepository.isGoogleDriveConfigured(),
-                    googleClientId = authRepository.getGoogleClientId(),
-                    googleClientSecret = authRepository.getGoogleClientSecret(),
-                    statusBannerMessage = StringResource(R.string.msg_pairing_imported),
-                    isStatusError = false
-                )
-            }
-            refreshAll()
-        } else {
-            _uiState.update {
-                it.copy(
-                    statusBannerMessage = StringResource(R.string.msg_pairing_invalid),
-                    isStatusError = true
-                )
-            }
-        }
+        authRepository.startBrowserOAuth(onOpenUrl)
     }
 
     fun disconnectGoogleDrive() {
@@ -187,7 +94,22 @@ class EdenSyncViewModel @Inject constructor(
 
     fun renameGame(titleId: String, customName: String) {
         saveSyncRepository.renameGame(titleId, customName)
-        refreshAll()
+        val trimmed = customName.trim()
+        if (trimmed.isNotEmpty()) {
+            _uiState.update { state ->
+                state.copy(
+                    games = state.games.map { item ->
+                        if (item.titleId.equals(titleId, ignoreCase = true)) {
+                            item.copy(displayName = trimmed)
+                        } else {
+                            item
+                        }
+                    }
+                )
+            }
+        } else {
+            refreshAll()
+        }
     }
 
     fun dismissBanner() = _uiState.update { it.copy(statusBannerMessage = null) }
@@ -195,13 +117,7 @@ class EdenSyncViewModel @Inject constructor(
     fun onAppResumed() {
         val nowConnected = authRepository.isGoogleDriveConfigured()
         if (nowConnected != _uiState.value.isGoogleDriveConnected) {
-            _uiState.update {
-                it.copy(
-                    isGoogleDriveConnected = nowConnected,
-                    googleClientId = authRepository.getGoogleClientId(),
-                    googleClientSecret = authRepository.getGoogleClientSecret()
-                )
-            }
+            _uiState.update { it.copy(isGoogleDriveConnected = nowConnected) }
             refreshAll()
         }
     }
@@ -223,7 +139,7 @@ class EdenSyncViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isScanning = false,
-                        statusBannerMessage = e.message?.let { msg -> StringResource(msg) }
+                        statusBannerMessage = e.message?.let(StringResource::invoke)
                             ?: StringResource(R.string.msg_scan_error),
                         isStatusError = true
                     )
@@ -267,22 +183,19 @@ class EdenSyncViewModel @Inject constructor(
                     it.copy(
                         isSyncing = false,
                         syncProgressMessage = null,
-                        statusBannerMessage = if (result.errors.isEmpty()) {
-                            if (result.uploadedCount == 0 && result.downloadedCount == 0) {
-                                StringResource(R.string.msg_all_in_sync)
-                            } else {
-                                StringResource(
-                                    R.string.msg_sync_completed,
-                                    result.uploadedCount,
-                                    result.downloadedCount
-                                )
-                            }
-                        } else {
-                            StringResource(
+                        statusBannerMessage = when {
+                            result.errors.isNotEmpty() -> StringResource(
                                 R.string.msg_sync_completed_warnings,
                                 result.uploadedCount,
                                 result.downloadedCount,
                                 result.errors.first()
+                            )
+                            result.uploadedCount == 0 && result.downloadedCount == 0 ->
+                                StringResource(R.string.msg_all_in_sync)
+                            else -> StringResource(
+                                R.string.msg_sync_completed,
+                                result.uploadedCount,
+                                result.downloadedCount
                             )
                         },
                         isStatusError = result.errors.isNotEmpty()
@@ -295,7 +208,7 @@ class EdenSyncViewModel @Inject constructor(
                     it.copy(
                         isSyncing = false,
                         syncProgressMessage = null,
-                        statusBannerMessage = e.message?.let { msg -> StringResource(msg) }
+                        statusBannerMessage = e.message?.let(StringResource::invoke)
                             ?: StringResource(R.string.msg_sync_error),
                         isStatusError = true
                     )
@@ -304,123 +217,84 @@ class EdenSyncViewModel @Inject constructor(
         }
     }
 
-    fun uploadSingleGame(item: GameSyncItem) {
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isSyncing = true,
-                    syncProgressMessage = StringResource(R.string.msg_uploading_game, item.displayName)
-                )
-            }
-            try {
-                val result = uploadSaveGameUseCase(item)
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        syncProgressMessage = null,
-                        statusBannerMessage = result.fold(
-                            onSuccess = { StringResource(R.string.msg_game_uploaded, item.displayName) },
-                            onFailure = { err ->
-                                err.message?.let { msg -> StringResource(R.string.msg_upload_error, msg) }
-                                    ?: StringResource(R.string.msg_sync_error)
-                            }
-                        ),
-                        isStatusError = result.isFailure
-                    )
-                }
-                refreshAll()
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        syncProgressMessage = null,
-                        statusBannerMessage = e.message?.let { msg -> StringResource(R.string.msg_upload_error, msg) }
-                            ?: StringResource(R.string.msg_sync_error),
-                        isStatusError = true
-                    )
-                }
-            }
+    fun uploadSingleGame(item: GameSyncItem) = executeSyncAction(
+        progressMessage = StringResource(R.string.msg_uploading_game, item.displayName),
+        onSuccessMessage = { StringResource(R.string.msg_game_uploaded, item.displayName) },
+        onErrorMessage = { err ->
+            err?.message?.let { StringResource(R.string.msg_upload_error, it) }
+                ?: StringResource(R.string.msg_sync_error)
         }
+    ) {
+        uploadSaveGameUseCase(item)
     }
 
-    fun downloadSingleGame(item: GameSyncItem) {
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isSyncing = true,
-                    syncProgressMessage = StringResource(R.string.msg_downloading_game, item.displayName)
-                )
-            }
-            try {
-                val result = downloadSaveGameUseCase(item)
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        syncProgressMessage = null,
-                        statusBannerMessage = result.fold(
-                            onSuccess = { StringResource(R.string.msg_game_downloaded, item.displayName) },
-                            onFailure = { err ->
-                                err.message?.let { msg -> StringResource(R.string.msg_download_error, msg) }
-                                    ?: StringResource(R.string.msg_sync_error)
-                            }
-                        ),
-                        isStatusError = result.isFailure
-                    )
-                }
-                refreshAll()
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        syncProgressMessage = null,
-                        statusBannerMessage = e.message?.let { msg -> StringResource(R.string.msg_download_error, msg) }
-                            ?: StringResource(R.string.msg_sync_error),
-                        isStatusError = true
-                    )
-                }
-            }
+    fun downloadSingleGame(item: GameSyncItem) = executeSyncAction(
+        progressMessage = StringResource(R.string.msg_downloading_game, item.displayName),
+        onSuccessMessage = { StringResource(R.string.msg_game_downloaded, item.displayName) },
+        onErrorMessage = { err ->
+            err?.message?.let { StringResource(R.string.msg_download_error, it) }
+                ?: StringResource(R.string.msg_sync_error)
         }
+    ) {
+        downloadSaveGameUseCase(item)
     }
 
-    fun restoreLatestBackup(item: GameSyncItem) {
+    fun restoreLatestBackup(item: GameSyncItem) = executeSyncAction(
+        progressMessage = StringResource(R.string.msg_restoring_backup, item.displayName),
+        onSuccessMessage = { StringResource(R.string.msg_backup_restored, item.displayName) },
+        onErrorMessage = { err ->
+            err?.message?.let { StringResource(R.string.msg_backup_restore_error, it) }
+                ?: StringResource(R.string.msg_sync_error)
+        }
+    ) {
+        restoreBackupUseCase(item)
+    }
+
+    private fun executeSyncAction(
+        progressMessage: StringResource,
+        onSuccessMessage: () -> StringResource,
+        onErrorMessage: (Throwable?) -> StringResource,
+        updateDriveStatusOnSuccess: Boolean = false,
+        action: suspend () -> Result<Unit>
+    ) {
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isSyncing = true,
-                    syncProgressMessage = StringResource(R.string.msg_restoring_backup, item.displayName)
+                    syncProgressMessage = progressMessage,
+                    isStatusError = false
                 )
             }
-            try {
-                val result = restoreBackupUseCase(item)
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        syncProgressMessage = null,
-                        statusBannerMessage = result.fold(
-                            onSuccess = { StringResource(R.string.msg_backup_restored, item.displayName) },
-                            onFailure = { err ->
-                                err.message?.let { msg -> StringResource(R.string.msg_backup_restore_error, msg) }
-                                    ?: StringResource(R.string.msg_sync_error)
-                            }
-                        ),
-                        isStatusError = result.isFailure
-                    )
+            val result = runCatching { action().getOrThrow() }
+            result.fold(
+                onSuccess = {
+                    _uiState.update {
+                        it.copy(
+                            isSyncing = false,
+                            syncProgressMessage = null,
+                            isGoogleDriveConnected = if (updateDriveStatusOnSuccess) {
+                                authRepository.isGoogleDriveConfigured()
+                            } else {
+                                it.isGoogleDriveConnected
+                            },
+                            statusBannerMessage = onSuccessMessage(),
+                            isStatusError = false
+                        )
+                    }
+                    refreshAll()
+                },
+                onFailure = { err ->
+                    if (err is CancellationException) throw err
+                    _uiState.update {
+                        it.copy(
+                            isSyncing = false,
+                            syncProgressMessage = null,
+                            statusBannerMessage = onErrorMessage(err),
+                            isStatusError = true
+                        )
+                    }
                 }
-                refreshAll()
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                _uiState.update {
-                    it.copy(
-                        isSyncing = false,
-                        syncProgressMessage = null,
-                        statusBannerMessage = e.message?.let { msg -> StringResource(R.string.msg_backup_restore_error, msg) }
-                            ?: StringResource(R.string.msg_sync_error),
-                        isStatusError = true
-                    )
-                }
-            }
+            )
         }
     }
 }

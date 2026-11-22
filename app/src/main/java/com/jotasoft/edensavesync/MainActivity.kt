@@ -2,7 +2,6 @@ package com.jotasoft.edensavesync
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -10,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.core.net.toUri
 import com.jotasoft.edensavesync.core.navigation.AppNavigation
 import com.jotasoft.edensavesync.data.device.GamepadInputHandler
 import com.jotasoft.edensavesync.data.device.GamepadScrollController
@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.data?.let { viewModel.onOAuthRedirect(it) }
+        intent.data?.let(viewModel::onOAuthRedirect)
     }
 
     override fun onResume() {
@@ -42,17 +42,17 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_UP && gamepadInputHandler.isStartButton(event.keyCode)) {
-            if (onStartButtonHandler?.invoke() == true) {
-                return true
-            }
+        if (event.action == KeyEvent.ACTION_UP &&
+            gamepadInputHandler.isStartButton(event.keyCode) &&
+            onStartButtonHandler?.invoke() == true
+        ) {
+            return true
         }
         return super.dispatchKeyEvent(gamepadInputHandler.translateKeyEvent(event))
     }
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        val rightStickY = gamepadInputHandler.getRightStickY(event)
-        GamepadScrollController.onRightStickMotion(rightStickY)
+        GamepadScrollController.onRightStickMotion(gamepadInputHandler.getRightStickY(event))
 
         val dpadKeyCode = gamepadInputHandler.processJoystickMotion(event)
         if (dpadKeyCode != null) {
@@ -66,19 +66,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        intent?.data?.let { viewModel.onOAuthRedirect(it) }
+        intent?.data?.let(viewModel::onOAuthRedirect)
 
         setContent {
             EdenSaveSyncTheme {
                 AppNavigation(
                     viewModel = viewModel,
-                    onOpenEdenFolderIntent = { useEdenProvider ->
-                        storageManager.createOpenEdenFolderIntent(useEdenProvider = useEdenProvider)
-                    },
+                    onOpenEdenFolderIntent = storageManager::createOpenEdenFolderIntent,
                     onOpenBrowserAuthUrl = { authUrl ->
                         runOnUiThread {
-                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
-                            startActivity(browserIntent)
+                            startActivity(Intent(Intent.ACTION_VIEW, authUrl.toUri()))
                         }
                     },
                     onRegisterStartButtonHandler = { handler ->

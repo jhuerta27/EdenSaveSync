@@ -32,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,10 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jotasoft.edensavesync.R
-import com.jotasoft.edensavesync.data.device.GamepadScrollController
 import com.jotasoft.edensavesync.domain.model.GameSyncItem
 import com.jotasoft.edensavesync.domain.model.SyncRecommendation
-import com.jotasoft.edensavesync.presentation.sync.components.BackupHistoryDialog
 import com.jotasoft.edensavesync.presentation.sync.components.DeviceNameDialog
 import com.jotasoft.edensavesync.presentation.sync.components.DriveConfigDialog
 import com.jotasoft.edensavesync.presentation.sync.components.EdenFolderSetupDialog
@@ -69,6 +66,7 @@ import com.jotasoft.edensavesync.presentation.sync.components.SetupStatusCard
 import com.jotasoft.edensavesync.presentation.sync.components.SyncSummaryBanner
 import com.jotasoft.edensavesync.ui.theme.AccentCyan
 import com.jotasoft.edensavesync.ui.theme.BgDark
+import com.jotasoft.edensavesync.ui.theme.BindGamepadScroll
 import com.jotasoft.edensavesync.ui.theme.TextPrimary
 import com.jotasoft.edensavesync.ui.theme.TextSecondary
 import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
@@ -78,8 +76,8 @@ fun EdenSyncScreen(
     viewModel: EdenSyncViewModel,
     onOpenEdenFolderIntent: (useEdenProvider: Boolean) -> Intent,
     onOpenBrowserAuthUrl: (String) -> Unit,
-    onOpenSettings: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -87,44 +85,31 @@ fun EdenSyncScreen(
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val treeUri = result.data?.data
-        if (treeUri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    treeUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            } catch (_: Exception) {
-            }
-            viewModel.onEdenFolderSelected(treeUri)
+        val treeUri = result.data?.data ?: return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                treeUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
         }
+        viewModel.onEdenFolderSelected(treeUri)
     }
 
     EdenSyncContent(
         uiState = uiState,
-        onPickEdenFolderStandard = {
-            val intent = onOpenEdenFolderIntent(false)
-            folderPickerLauncher.launch(intent)
-        },
-        onPickEdenFolderProvider = {
-            val intent = onOpenEdenFolderIntent(true)
-            folderPickerLauncher.launch(intent)
-        },
-        onRefresh = { viewModel.refreshAll() },
+        onPickEdenFolderStandard = { folderPickerLauncher.launch(onOpenEdenFolderIntent(false)) },
+        onPickEdenFolderProvider = { folderPickerLauncher.launch(onOpenEdenFolderIntent(true)) },
+        onRefresh = viewModel::refreshAll,
         onOpenSettings = onOpenSettings,
-        onSyncAll = { viewModel.syncAllRecommended() },
-        onUploadSingle = { viewModel.uploadSingleGame(it) },
-        onDownloadSingle = { viewModel.downloadSingleGame(it) },
-        onRestoreBackup = { viewModel.restoreLatestBackup(it) },
-        onRenameGame = { titleId, name -> viewModel.renameGame(titleId, name) },
-        onUpdateDeviceName = { viewModel.updateDeviceName(it) },
-        onStartBrowserOAuth = {
-            viewModel.startBrowserOAuth { authUrl ->
-                onOpenBrowserAuthUrl(authUrl)
-            }
-        },
-        onDisconnectDrive = { viewModel.disconnectGoogleDrive() },
-        onDismissBanner = { viewModel.dismissBanner() },
+        onSyncAll = viewModel::syncAllRecommended,
+        onUploadSingle = viewModel::uploadSingleGame,
+        onDownloadSingle = viewModel::downloadSingleGame,
+        onRestoreBackup = viewModel::restoreLatestBackup,
+        onRenameGame = viewModel::renameGame,
+        onUpdateDeviceName = viewModel::updateDeviceName,
+        onStartBrowserOAuth = { viewModel.startBrowserOAuth(onOpenBrowserAuthUrl) },
+        onDisconnectDrive = viewModel::disconnectGoogleDrive,
+        onDismissBanner = viewModel::dismissBanner,
         modifier = modifier
     )
 }
@@ -136,7 +121,6 @@ fun EdenSyncContent(
     onPickEdenFolderStandard: () -> Unit,
     onPickEdenFolderProvider: () -> Unit,
     onRefresh: () -> Unit,
-    onOpenSettings: () -> Unit = {},
     onSyncAll: () -> Unit,
     onUploadSingle: (GameSyncItem) -> Unit,
     onDownloadSingle: (GameSyncItem) -> Unit,
@@ -146,91 +130,66 @@ fun EdenSyncContent(
     onStartBrowserOAuth: () -> Unit,
     onDisconnectDrive: () -> Unit,
     onDismissBanner: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit = {}
 ) {
     var showFolderHelpDialog by remember { mutableStateOf(false) }
     var showDriveConfigDialog by remember { mutableStateOf(false) }
     var showDeviceNameDialog by remember { mutableStateOf(false) }
     var gameToRename by remember { mutableStateOf<GameSyncItem?>(null) }
-    var gameForBackupHistory by remember { mutableStateOf<GameSyncItem?>(null) }
     val lazyListState = rememberLazyListState()
 
-    DisposableEffect(lazyListState) {
-        val closeable = GamepadScrollController.registerConsumer { delta ->
-            lazyListState.dispatchRawDelta(delta)
-        }
-        onDispose {
-            closeable.close()
-        }
-    }
+    BindGamepadScroll(lazyListState)
+
     val density = LocalDensity.current
     val refreshThresholdPx = remember(density) { with(density) { 80.dp.toPx() } }
 
-    val nestedScrollConnection =
-        remember(onRefresh, uiState.isScanning, uiState.isSyncing, refreshThresholdPx) {
-            object : NestedScrollConnection {
-                private var pullDistance = 0f
+    val nestedScrollConnection = remember(onRefresh, uiState.isScanning, uiState.isSyncing, refreshThresholdPx) {
+        object : NestedScrollConnection {
+            private var pullDistance = 0f
 
-                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    if (available.y < 0f && pullDistance > 0f) {
-                        pullDistance = (pullDistance + available.y).coerceAtLeast(0f)
-                    }
-                    return Offset.Zero
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < 0f && pullDistance > 0f) {
+                    pullDistance = (pullDistance + available.y).coerceAtLeast(0f)
                 }
+                return Offset.Zero
+            }
 
-                override fun onPostScroll(
-                    consumed: Offset,
-                    available: Offset,
-                    source: NestedScrollSource
-                ): Offset {
-                    if (source == NestedScrollSource.UserInput && available.y > 0f) {
-                        if (lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0) {
-                            pullDistance += available.y
-                        }
-                    }
-                    return Offset.Zero
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (source == NestedScrollSource.UserInput &&
+                    available.y > 0f &&
+                    lazyListState.firstVisibleItemIndex == 0 &&
+                    lazyListState.firstVisibleItemScrollOffset == 0
+                ) {
+                    pullDistance += available.y
                 }
+                return Offset.Zero
+            }
 
-                override suspend fun onPreFling(available: Velocity): Velocity {
-                    if (pullDistance >= refreshThresholdPx && !uiState.isScanning && !uiState.isSyncing) {
-                        onRefresh()
-                    }
-                    pullDistance = 0f
-                    return Velocity.Zero
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullDistance >= refreshThresholdPx && !uiState.isScanning && !uiState.isSyncing) {
+                    onRefresh()
                 }
+                pullDistance = 0f
+                return Velocity.Zero
+            }
 
-                override suspend fun onPostFling(
-                    consumed: Velocity,
-                    available: Velocity
-                ): Velocity {
-                    pullDistance = 0f
-                    return Velocity.Zero
-                }
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                pullDistance = 0f
+                return Velocity.Zero
             }
         }
-
-    val uploadPendingCount =
-        uiState.games.count { it.recommendation == SyncRecommendation.UPLOAD_TO_CLOUD }
-    val downloadPendingCount =
-        uiState.games.count { it.recommendation == SyncRecommendation.DOWNLOAD_FROM_CLOUD }
-
-    val statusBannerText = uiState.statusBannerMessage?.let { sr ->
-        if (sr.resId != 0) {
-            if (sr.args.isEmpty()) stringResource(sr.resId)
-            else stringResource(sr.resId, *sr.args.toTypedArray())
-        } else {
-            sr.text
-        }
     }
 
-    val syncProgressText = uiState.syncProgressMessage?.let { sr ->
-        if (sr.resId != 0) {
-            if (sr.args.isEmpty()) stringResource(sr.resId)
-            else stringResource(sr.resId, *sr.args.toTypedArray())
-        } else {
-            sr.text
-        }
-    }
+    val uploadPendingCount = uiState.games.count { it.recommendation == SyncRecommendation.UPLOAD_TO_CLOUD }
+    val downloadPendingCount = uiState.games.count { it.recommendation == SyncRecommendation.DOWNLOAD_FROM_CLOUD }
+
+    val statusBannerText = uiState.statusBannerMessage?.asString()
+    val syncProgressText = uiState.syncProgressMessage?.asString()
 
     Scaffold(
         containerColor = BgDark,
@@ -263,7 +222,10 @@ fun EdenSyncContent(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
                                     .clickable { showDeviceNameDialog = true }
-                                    .gamepadFocusable(shape = RoundedCornerShape(6.dp), onClick = { showDeviceNameDialog = true })
+                                    .gamepadFocusable(
+                                        shape = RoundedCornerShape(6.dp),
+                                        onClick = { showDeviceNameDialog = true }
+                                    )
                                     .padding(horizontal = 4.dp, vertical = 2.dp)
                             ) {
                                 Text(
@@ -440,16 +402,6 @@ fun EdenSyncContent(
             onSave = { newName ->
                 onRenameGame(target.titleId, newName)
                 gameToRename = null
-            }
-        )
-    }
-
-    gameForBackupHistory?.let { target ->
-        BackupHistoryDialog(
-            item = target,
-            onDismiss = { gameForBackupHistory = null },
-            onRestoreLatestBackup = {
-                onRestoreBackup(target)
             }
         )
     }

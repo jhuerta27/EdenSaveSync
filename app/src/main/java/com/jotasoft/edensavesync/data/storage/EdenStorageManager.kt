@@ -8,6 +8,7 @@ import android.webkit.MimeTypeMap
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import com.jotasoft.edensavesync.domain.model.LocalSaveGame
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
@@ -21,7 +22,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class EdenStorageManager @Inject constructor(private val context: Context) {
+class EdenStorageManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     companion object {
         val EDEN_PACKAGES = listOf(
@@ -32,38 +35,16 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
         private val HEX_16_REGEX = Regex("^[0-9A-Fa-f]{16}$")
         private val HEX_32_REGEX = Regex("^[0-9A-Fa-f]{32}$")
         private const val ZERO_USER_DIR = "0000000000000000"
+        private const val IO_BUFFER_SIZE = 32 * 1024
     }
 
-    /**
-     * Detecta si Eden está instalado en el dispositivo y devuelve su packageName.
-     */
-    fun detectInstalledEdenPackage(): String {
-        val pm = context.packageManager
-        for (pkg in EDEN_PACKAGES) {
-            try {
-                pm.getPackageInfo(pkg, 0)
-                return pkg
-            } catch (_: Exception) {
-            }
-        }
-        return EDEN_PACKAGES.first()
-    }
+    fun detectInstalledEdenPackage(): String =
+        EDEN_PACKAGES.firstOrNull { pkg ->
+            runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess
+        } ?: EDEN_PACKAGES.first()
 
-    /**
-     * Construye el Intent para abrir el selector de carpetas SAF apuntando directamente
-     * a Android/data/dev.eden.eden_emulator/files/nand/user/save o al DocumentsProvider de Eden.
-     */
     fun createOpenEdenFolderIntent(useEdenProvider: Boolean = false): Intent {
         val pkg = detectInstalledEdenPackage()
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-            addFlags(
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
-                        Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
-            )
-        }
-
         val initialUri = if (useEdenProvider) {
             "content://$pkg.documents/tree/root".toUri()
         } else {
@@ -71,32 +52,30 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
             "content://com.android.externalstorage.documents/tree/primary%3A$encodedPath/document/primary%3A$encodedPath".toUri()
         }
 
-        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
-        return intent
+        return Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+            )
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
+        }
     }
 
-    /**
-     * Localiza el directorio `0000000000000000` (donde residen los perfiles de usuario de Switch)
-     * o directamente un directorio de perfil de 32 caracteres hexadecimales, sin importar qué nivel
-     * de la carpeta de Eden haya seleccionado el usuario.
-     */
     private fun resolveProfileContainers(rootDoc: DocumentFile): List<DocumentFile> {
         val name = rootDoc.name.orEmpty()
 
-        // Caso 1: El usuario seleccionó directamente la carpeta de un perfil (<32-hex>)
-        if (HEX_32_REGEX.matches(name) && name != ZERO_USER_DIR.repeat(2)) {
+        if (HEX_32_REGEX.matches(name) && !name.equals(ZERO_USER_DIR.repeat(2), ignoreCase = true)) {
             return listOf(rootDoc)
         }
 
-        // Caso 2: El usuario seleccionó `0000000000000000`
         if (name.equals(ZERO_USER_DIR, ignoreCase = true)) {
             return findProfileDirsInsideZeroDir(rootDoc)
         }
 
-        // Caso 3: Navegar hacia abajo desde raíz de Eden / files / nand / user / save
         var current: DocumentFile? = rootDoc
-        val steps = listOf("files", "nand", "user", "save", ZERO_USER_DIR)
-        for (step in steps) {
+        for (step in listOf("files", "nand", "user", "save", ZERO_USER_DIR)) {
             val child = current?.findFileIgnoreCase(step)
             if (child != null && child.isDirectory) {
                 current = child
@@ -107,25 +86,18 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
             return findProfileDirsInsideZeroDir(current)
         }
 
-        // Caso 4: ¿Ya estamos en `save` y tiene `0000000000000000` dentro?
         val zeroChild = rootDoc.findFileIgnoreCase(ZERO_USER_DIR)
         if (zeroChild != null && zeroChild.isDirectory) {
             return findProfileDirsInsideZeroDir(zeroChild)
         }
 
-        // Caso 5: ¿La carpeta seleccionada contiene directamente subcarpetas de perfiles 32-hex?
-        val directProfiles = rootDoc.listFiles().filter {
-            it.isDirectory && HEX_32_REGEX.matches(it.name.orEmpty()) &&
-                    !it.name.equals(ZERO_USER_DIR.repeat(2), ignoreCase = true)
-        }
+        val directProfiles = findProfileDirsInsideZeroDir(rootDoc)
         if (directProfiles.isNotEmpty()) {
             return directProfiles
         }
 
-        // Caso 6: Si el usuario seleccionó `save` pero aún está vacío, creamos la estructura base
         if (name.equals("save", ignoreCase = true)) {
-            val createdZero = rootDoc.createDirectory(ZERO_USER_DIR)
-            if (createdZero != null) {
+            rootDoc.createDirectory(ZERO_USER_DIR)?.let { createdZero ->
                 return findProfileDirsInsideZeroDir(createdZero)
             }
         }
@@ -133,31 +105,29 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
         return listOf(rootDoc)
     }
 
-    private fun findProfileDirsInsideZeroDir(zeroDir: DocumentFile): List<DocumentFile> {
-        val profiles = zeroDir.listFiles().filter {
-            it.isDirectory && HEX_32_REGEX.matches(it.name.orEmpty()) &&
-                    !it.name.equals(ZERO_USER_DIR.repeat(2), ignoreCase = true)
+    private fun findProfileDirsInsideZeroDir(container: DocumentFile): List<DocumentFile> =
+        container.listFiles().filter {
+            it.isDirectory &&
+                HEX_32_REGEX.matches(it.name.orEmpty()) &&
+                !it.name.equals(ZERO_USER_DIR.repeat(2), ignoreCase = true)
         }
-        return profiles
-    }
 
-    /**
-     * Escanea todas las partidas guardadas locales en la carpeta vinculada de Eden.
-     */
+    private fun findTitleDirectory(profileDir: DocumentFile, titleId: String): DocumentFile? =
+        profileDir.findFileIgnoreCase(titleId)
+            ?: profileDir.listFiles().firstOrNull {
+                it.isDirectory && it.name.orEmpty().startsWith("$titleId (", ignoreCase = true)
+            }
+
     fun scanLocalSaves(treeUri: Uri): Pair<String, List<LocalSaveGame>> {
-        val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
-            ?: return "" to emptyList()
-
+        val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return "" to emptyList()
         val profileDirs = resolveProfileContainers(rootDoc)
         val savesByTitle = mutableMapOf<String, LocalSaveGame>()
         var primaryProfileId = profileDirs.firstOrNull()?.name.orEmpty()
 
         for (profileDir in profileDirs) {
             val profileId = profileDir.name.orEmpty()
-            val children = profileDir.listFiles()
-            for (titleDir in children) {
-                val rawName = titleDir.name.orEmpty()
-                val titleName = rawName.substringBefore(" (").trim().uppercase()
+            for (titleDir in profileDir.listFiles()) {
+                val titleName = titleDir.name.orEmpty().substringBefore(" (").trim().uppercase()
                 if (!titleDir.isDirectory || !HEX_16_REGEX.matches(titleName)) continue
 
                 val stats = computeDirectoryStats(titleDir)
@@ -183,106 +153,101 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
         return primaryProfileId to savesByTitle.values.sortedByDescending { it.lastModifiedMs }
     }
 
-    /**
-     * Empaqueta la carpeta de guardado de un `<TitleID>` en un archivo `.zip` temporal para subir a Google Drive.
-     */
+    fun scanSingleTitleSave(treeUri: Uri, titleId: String): LocalSaveGame? {
+        val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return null
+        val normalizedTitleId = titleId.uppercase()
+        var latest: LocalSaveGame? = null
+
+        for (profileDir in resolveProfileContainers(rootDoc)) {
+            val titleDir = findTitleDirectory(profileDir, normalizedTitleId) ?: continue
+            val stats = computeDirectoryStats(titleDir)
+            if (stats.fileCount == 0) continue
+
+            val candidate = LocalSaveGame(
+                titleId = normalizedTitleId,
+                userProfileId = profileDir.name.orEmpty(),
+                lastModifiedMs = stats.lastModifiedMs,
+                totalSizeBytes = stats.totalSizeBytes,
+                fileCount = stats.fileCount,
+                contentHash = stats.contentHash
+            )
+            if (latest == null || candidate.lastModifiedMs > latest.lastModifiedMs) {
+                latest = candidate
+            }
+        }
+        return latest
+    }
+
     fun exportTitleSaveToZip(treeUri: Uri, titleId: String, targetZipFile: File): Boolean {
         val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return false
-        val profileDirs = resolveProfileContainers(rootDoc)
-
-        val titleDir = profileDirs
-            .mapNotNull { profile ->
-                profile.findFileIgnoreCase(titleId)
-                    ?: profile.listFiles().firstOrNull {
-                        it.isDirectory && it.name.orEmpty().startsWith("$titleId (", ignoreCase = true)
-                    }
-            }
-            .maxByOrNull { computeDirectoryStats(it).fileCount }
-            ?: return false
-
-        val stats = computeDirectoryStats(titleDir)
-        if (stats.fileCount == 0) return false
+        val candidates = resolveProfileContainers(rootDoc).mapNotNull { findTitleDirectory(it, titleId) }
+        val titleDir = when {
+            candidates.isEmpty() -> return false
+            candidates.size == 1 -> candidates.first()
+            else -> candidates.maxByOrNull { countSaveFiles(it) } ?: return false
+        }
 
         targetZipFile.parentFile?.mkdirs()
         if (targetZipFile.exists()) targetZipFile.delete()
 
-        ZipOutputStream(BufferedOutputStream(FileOutputStream(targetZipFile))).use { zos ->
-            zipDocumentDirectory(titleDir, "", zos)
+        val buffer = ByteArray(IO_BUFFER_SIZE)
+        val zippedFileCount = ZipOutputStream(BufferedOutputStream(FileOutputStream(targetZipFile))).use { zos ->
+            zipDocumentDirectory(titleDir, "", zos, buffer)
         }
-        if (targetZipFile.exists() && targetZipFile.length() <= 22L) {
+        if (zippedFileCount == 0 || !targetZipFile.exists() || targetZipFile.length() <= 22L) {
             targetZipFile.delete()
             return false
         }
-        return targetZipFile.exists() && targetZipFile.length() > 22L
+        return true
     }
 
-    /**
-     * Importa un `.zip` descargado de Google Drive dentro del perfil activo local en este dispositivo.
-     * Antes de sobrescribir, guarda automáticamente un backup local por seguridad.
-     */
     fun importTitleSaveFromZip(treeUri: Uri, titleId: String, sourceZipFile: File): Boolean {
-        if (!sourceZipFile.exists() || sourceZipFile.length() <= 22L) {
-            return false
-        }
+        if (!sourceZipFile.exists() || sourceZipFile.length() <= 22L) return false
+
         val normalizedTitleId = titleId.uppercase()
         val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return false
 
-        // 1. Crear backup local de la partida existente si la hay
         createLocalBackupIfPresent(treeUri, normalizedTitleId)
 
-        // 2. Localizar el directorio de perfil de usuario activo en este dispositivo
         val targetProfileDir = resolveOrCreateActiveProfileDir(rootDoc) ?: return false
 
-        // Limpiar cualquier carpeta residual duplicada como "0100... (1)" de intentos previos
         targetProfileDir.listFiles().forEach { child ->
-            val childName = child.name.orEmpty()
-            if (child.isDirectory && childName.startsWith("$normalizedTitleId (", ignoreCase = true)) {
+            if (child.isDirectory && child.name.orEmpty().startsWith("$normalizedTitleId (", ignoreCase = true)) {
                 deleteRecursively(child)
             }
         }
 
-        // 3. Obtener o crear la carpeta del TitleID sin borrar el directorio en sí (evita duplicados " (1)")
         val targetTitleDir = targetProfileDir.findFileIgnoreCase(normalizedTitleId)
             ?: targetProfileDir.createDirectory(normalizedTitleId)
             ?: return false
 
-        // Vaciar el contenido anterior de targetTitleDir para garantizar una extracción limpia
-        targetTitleDir.listFiles().forEach { child ->
-            deleteRecursively(child)
-        }
+        targetTitleDir.listFiles().forEach(::deleteRecursively)
 
-        // Caché en memoria de subdirectorios creados para resolución O(1) sin saturar Binder
-        val dirCache = mutableMapOf<String, DocumentFile>()
-        dirCache[""] = targetTitleDir
+        val dirCache = mutableMapOf("" to targetTitleDir)
 
         fun resolveDir(relativePath: String): DocumentFile? {
             val normalized = relativePath.trim('/', '\\').replace('\\', '/')
             if (normalized.isEmpty()) return targetTitleDir
             dirCache[normalized]?.let { return it }
 
-            val parts = normalized.split('/').filter { it.isNotEmpty() }
             var currentPath = ""
             var currentDoc: DocumentFile = targetTitleDir
 
-            for (part in parts) {
+            for (part in normalized.split('/').filter { it.isNotEmpty() }) {
                 currentPath = if (currentPath.isEmpty()) part else "$currentPath/$part"
-                val cached = dirCache[currentPath]
-                if (cached != null) {
-                    currentDoc = cached
-                } else {
-                    val nextDoc = currentDoc.findFile(part) ?: currentDoc.createDirectory(part)
-                    if (nextDoc == null) return null
-                    dirCache[currentPath] = nextDoc
-                    currentDoc = nextDoc
-                }
+                val nextDoc = dirCache[currentPath]
+                    ?: currentDoc.findFile(part)
+                    ?: currentDoc.createDirectory(part)
+                    ?: return null
+                dirCache[currentPath] = nextDoc
+                currentDoc = nextDoc
             }
             return currentDoc
         }
 
-        // 4. Extraer el contenido del ZIP dentro de targetTitleDir
         ZipInputStream(BufferedInputStream(FileInputStream(sourceZipFile))).use { zis ->
             var entry: ZipEntry? = zis.nextEntry
-            val buffer = ByteArray(32 * 1024)
+            val buffer = ByteArray(IO_BUFFER_SIZE)
             while (entry != null) {
                 val cleanPath = entry.name.trimStart('/', '\\').replace('\\', '/')
                 if (cleanPath.isNotEmpty() && !cleanPath.contains("..")) {
@@ -332,37 +297,30 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
         return true
     }
 
-    /**
-     * Crea una copia de seguridad local antes de sobrescribir una partida (mantiene las 5 más recientes).
-     */
+    private fun backupDirFor(titleId: String): File =
+        File(context.filesDir, "backups/${titleId.uppercase()}")
+
     private fun createLocalBackupIfPresent(treeUri: Uri, titleId: String) {
-        try {
-            val backupDir = File(context.filesDir, "backups/${titleId.uppercase()}")
-            backupDir.mkdirs()
+        runCatching {
+            val backupDir = backupDirFor(titleId).apply { mkdirs() }
             val backupFile = File(backupDir, "backup_${System.currentTimeMillis()}.zip")
             val exported = exportTitleSaveToZip(treeUri, titleId, backupFile)
             if ((!exported || backupFile.length() <= 100L) && backupFile.exists()) {
                 backupFile.delete()
             }
-            // Conservar máximo 5 backups por juego
-            val allBackups = backupDir.listFiles { f -> f.extension == "zip" }
+            backupDir.listFiles { f -> f.extension == "zip" }
                 ?.sortedByDescending { it.lastModified() }
-                .orEmpty()
-            if (allBackups.size > 5) {
-                allBackups.drop(5).forEach { it.delete() }
-            }
-        } catch (_: Exception) {
+                ?.drop(5)
+                ?.forEach { it.delete() }
         }
     }
 
-    fun getLocalBackupCount(titleId: String): Int {
-        val backupDir = File(context.filesDir, "backups/${titleId.uppercase()}")
-        return backupDir.listFiles { f -> f.extension == "zip" }?.size ?: 0
-    }
+    fun getLocalBackupCount(titleId: String): Int =
+        backupDirFor(titleId).listFiles { f -> f.extension == "zip" }?.size ?: 0
 
     fun restoreLatestLocalBackup(treeUri: Uri, titleId: String): Boolean {
-        val backupDir = File(context.filesDir, "backups/${titleId.uppercase()}")
-        val latestBackup = backupDir.listFiles { f -> f.extension == "zip" }
+        val latestBackup = backupDirFor(titleId)
+            .listFiles { f -> f.extension == "zip" }
             ?.maxByOrNull { it.lastModified() }
             ?: return false
         return importTitleSaveFromZip(treeUri, titleId, latestBackup)
@@ -371,59 +329,55 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
     private fun resolveOrCreateActiveProfileDir(rootDoc: DocumentFile): DocumentFile? {
         val profiles = resolveProfileContainers(rootDoc)
         if (profiles.isNotEmpty()) {
-            // Elegir el perfil que tenga más juegos guardados en este dispositivo
             return profiles.maxByOrNull { profile ->
-                profile.listFiles()
-                    .count { it.isDirectory && HEX_16_REGEX.matches(it.name.orEmpty()) }
+                profile.listFiles().count { it.isDirectory && HEX_16_REGEX.matches(it.name.orEmpty()) }
             } ?: profiles.first()
         }
 
-        // Si `0000000000000000` existe pero aún no tiene perfil, crear o buscar
         val zeroDir = rootDoc.findFileIgnoreCase(ZERO_USER_DIR) ?: rootDoc
         val defaultProfileName = "00000001000000000000000000000000"
         return zeroDir.findFileIgnoreCase(defaultProfileName)
             ?: zeroDir.createDirectory(defaultProfileName)
     }
 
-    private fun findOrCreateSubdirectory(
-        baseDir: DocumentFile,
-        relativePath: String
-    ): DocumentFile? {
-        var current: DocumentFile? = baseDir
-        val parts = relativePath.split('/').filter { it.isNotEmpty() }
-        for (part in parts) {
-            val next = current?.findFile(part) ?: current?.createDirectory(part)
-            current = next
-        }
-        return current
-    }
-
     private fun deleteRecursively(doc: DocumentFile) {
         if (doc.isDirectory) {
-            doc.listFiles().forEach { child ->
-                deleteRecursively(child)
-            }
+            doc.listFiles().forEach(::deleteRecursively)
         }
         doc.delete()
+    }
+
+    private fun countSaveFiles(dir: DocumentFile): Int {
+        var count = 0
+        for (child in dir.listFiles()) {
+            if (child.isDirectory) {
+                count += countSaveFiles(child)
+            } else if (!child.name.equals(".yuzu_save_size", ignoreCase = true)) {
+                count++
+            }
+        }
+        return count
     }
 
     private fun zipDocumentDirectory(
         dir: DocumentFile,
         parentPath: String,
-        zos: ZipOutputStream
-    ) {
-        val buffer = ByteArray(32 * 1024)
+        zos: ZipOutputStream,
+        buffer: ByteArray
+    ): Int {
+        var fileCount = 0
         val children = dir.listFiles().sortedBy { it.name.orEmpty() }
         for (child in children) {
             val childName = child.name ?: continue
             val entryPath = if (parentPath.isEmpty()) childName else "$parentPath/$childName"
             if (child.isDirectory) {
-                val dirEntry = ZipEntry("$entryPath/")
-                val mod = child.lastModified()
-                if (mod > 0L) dirEntry.time = mod
+                val dirEntry = ZipEntry("$entryPath/").apply {
+                    val mod = child.lastModified()
+                    if (mod > 0L) time = mod
+                }
                 zos.putNextEntry(dirEntry)
                 zos.closeEntry()
-                zipDocumentDirectory(child, entryPath, zos)
+                fileCount += zipDocumentDirectory(child, entryPath, zos, buffer)
             } else if (child.isFile) {
                 val entry = ZipEntry(entryPath).apply {
                     val mod = child.lastModified()
@@ -437,8 +391,12 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
                     }
                 }
                 zos.closeEntry()
+                if (!childName.equals(".yuzu_save_size", ignoreCase = true)) {
+                    fileCount++
+                }
             }
         }
+        return fileCount
     }
 
     private data class DirStats(
@@ -453,7 +411,7 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
         var totalSize = 0L
         var count = 0
         val digest = MessageDigest.getInstance("SHA-256")
-        val buffer = ByteArray(32 * 1024)
+        val buffer = ByteArray(IO_BUFFER_SIZE)
 
         fun walk(current: DocumentFile, relPrefix: String) {
             val children = current.listFiles().sortedBy { it.name.orEmpty() }
@@ -466,9 +424,7 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
                     walk(child, relPath)
                 } else {
                     val isYuzuMeta = name.equals(".yuzu_save_size", ignoreCase = true)
-                    if (!isYuzuMeta) {
-                        count++
-                    }
+                    if (!isYuzuMeta) count++
                     val len = child.length()
                     val mod = child.lastModified()
                     totalSize += len
@@ -476,15 +432,13 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
 
                     digest.update(relPath.toByteArray(Charsets.UTF_8))
                     digest.update(len.toString().toByteArray(Charsets.UTF_8))
-                    // Hash del contenido del archivo para garantizar exactitud entre dispositivos
-                    try {
+                    runCatching {
                         context.contentResolver.openInputStream(child.uri)?.use { input ->
                             var read: Int
                             while (input.read(buffer).also { read = it } != -1) {
                                 digest.update(buffer, 0, read)
                             }
                         }
-                    } catch (_: Exception) {
                     }
                 }
             }
@@ -504,8 +458,7 @@ class EdenStorageManager @Inject constructor(private val context: Context) {
         )
     }
 
-    private fun DocumentFile.findFileIgnoreCase(targetName: String): DocumentFile? {
-        findFile(targetName)?.let { return it }
-        return listFiles().firstOrNull { it.name.equals(targetName, ignoreCase = true) }
-    }
+    private fun DocumentFile.findFileIgnoreCase(targetName: String): DocumentFile? =
+        findFile(targetName)
+            ?: listFiles().firstOrNull { it.name.equals(targetName, ignoreCase = true) }
 }

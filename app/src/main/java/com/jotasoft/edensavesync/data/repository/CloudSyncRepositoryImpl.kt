@@ -36,6 +36,4 @@ class CloudSyncRepositoryImpl @Inject constructor(
 
     override suspend fun downloadSaveZip(driveFileId: String, destZipFile: File) =
         driveClient.downloadSaveZip(driveFileId, destZipFile)
-
-    override fun disconnect() = prefs.clearGoogleDriveAuth()
 }

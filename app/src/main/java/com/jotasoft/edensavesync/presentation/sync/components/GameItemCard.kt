@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -35,6 +34,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -67,23 +67,20 @@ fun GameItemCard(
     onRenameClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val badgeColor = when (item.recommendation) {
-        SyncRecommendation.UPLOAD_TO_CLOUD -> AccentCyan
-        SyncRecommendation.DOWNLOAD_FROM_CLOUD -> AccentPurple
-        SyncRecommendation.IN_SYNC -> AccentGreen
-    }
-    val badgeLabel = when (item.recommendation) {
-        SyncRecommendation.UPLOAD_TO_CLOUD -> stringResource(R.string.badge_upload_recommended)
-        SyncRecommendation.DOWNLOAD_FROM_CLOUD -> stringResource(R.string.badge_download_recommended)
-        SyncRecommendation.IN_SYNC -> stringResource(R.string.badge_in_sync)
+    val (badgeColor, badgeLabelRes) = when (item.recommendation) {
+        SyncRecommendation.UPLOAD_TO_CLOUD -> AccentCyan to R.string.badge_upload_recommended
+        SyncRecommendation.DOWNLOAD_FROM_CLOUD -> AccentPurple to R.string.badge_download_recommended
+        SyncRecommendation.IN_SYNC -> AccentGreen to R.string.badge_in_sync
     }
 
-    val displayTitle =
-        if (item.displayName.startsWith("Switch Game (") || item.displayName.startsWith("Juego de Switch (")) {
-            stringResource(R.string.switch_game_fallback, item.titleId)
-        } else {
-            item.displayName
-        }
+    val displayTitle = if (
+        item.displayName.startsWith("Switch Game (") ||
+        item.displayName.startsWith("Juego de Switch (")
+    ) {
+        stringResource(R.string.switch_game_fallback, item.titleId)
+    } else {
+        item.displayName
+    }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = CardDark),
@@ -113,7 +110,7 @@ fun GameItemCard(
                             modifier = Modifier
                                 .size(24.dp)
                                 .clip(CircleShape)
-                                .clickable { onRenameClick() }
+                                .clickable(onClick = onRenameClick)
                                 .gamepadFocusable(shape = CircleShape, onClick = onRenameClick),
                             contentAlignment = Alignment.Center
                         ) {
@@ -143,7 +140,7 @@ fun GameItemCard(
                     )
                 ) {
                     Text(
-                        text = badgeLabel,
+                        text = stringResource(badgeLabelRes),
                         color = badgeColor,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -154,101 +151,39 @@ fun GameItemCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Comparativa lado a lado: Dispositivo Local vs Google Drive
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Columna Local
-                Surface(
-                    color = BgDark.copy(alpha = 0.65f),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = stringResource(
-                                R.string.game_card_local_header,
-                                currentDeviceName
-                            ),
-                            color = AccentCyan,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                SaveComparisonPane(
+                    header = stringResource(R.string.game_card_local_header, currentDeviceName),
+                    headerColor = AccentCyan,
+                    primaryLine = item.localSave?.let { formatDateTime(it.lastModifiedMs) },
+                    secondaryLine = item.localSave?.let {
+                        stringResource(
+                            R.string.game_card_stats,
+                            formatBytes(it.totalSizeBytes),
+                            it.fileCount
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        if (item.localSave != null) {
-                            Text(
-                                text = formatDateTime(item.localSave.lastModifiedMs),
-                                color = TextPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = stringResource(
-                                    R.string.game_card_stats,
-                                    formatBytes(item.localSave.totalSizeBytes),
-                                    item.localSave.fileCount
-                                ),
-                                color = TextSecondary,
-                                fontSize = 11.sp
-                            )
-                        } else {
-                            Text(
-                                text = stringResource(R.string.game_card_no_local),
-                                color = TextSecondary,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
+                    },
+                    emptyLabel = stringResource(R.string.game_card_no_local),
+                    modifier = Modifier.weight(1f)
+                )
 
-                // Columna Google Drive
-                Surface(
-                    color = BgDark.copy(alpha = 0.65f),
-                    shape = RoundedCornerShape(10.dp),
+                SaveComparisonPane(
+                    header = stringResource(R.string.game_card_cloud_header),
+                    headerColor = AccentPurple,
+                    primaryLine = item.remoteSave?.let { formatDateTime(it.lastModifiedMs) },
+                    secondaryLine = item.remoteSave?.let {
+                        stringResource(R.string.game_card_remote_source, it.sourceDeviceName)
+                    },
+                    emptyLabel = stringResource(R.string.game_card_no_remote),
                     modifier = Modifier.weight(1f)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = stringResource(R.string.game_card_cloud_header),
-                            color = AccentPurple,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        if (item.remoteSave != null) {
-                            Text(
-                                text = formatDateTime(item.remoteSave.lastModifiedMs),
-                                color = TextPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = stringResource(
-                                    R.string.game_card_remote_source,
-                                    item.remoteSave.sourceDeviceName
-                                ),
-                                color = TextSecondary,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        } else {
-                            Text(
-                                text = stringResource(R.string.game_card_no_remote),
-                                color = TextSecondary,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
+                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Botones manuales individuales (Subir, Descargar, Restaurar Backup)
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -330,6 +265,55 @@ fun GameItemCard(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SaveComparisonPane(
+    header: String,
+    headerColor: Color,
+    primaryLine: String?,
+    secondaryLine: String?,
+    emptyLabel: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = BgDark.copy(alpha = 0.65f),
+        shape = RoundedCornerShape(10.dp),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Text(
+                text = header,
+                color = headerColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            if (primaryLine != null && secondaryLine != null) {
+                Text(
+                    text = primaryLine,
+                    color = TextPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = secondaryLine,
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    text = emptyLabel,
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
             }
         }
     }

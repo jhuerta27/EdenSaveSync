@@ -2,17 +2,19 @@ package com.jotasoft.edensavesync.data.storage
 
 import android.content.Context
 import android.net.Uri
-import android.util.Base64
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import com.jotasoft.edensavesync.data.device.DeviceDetector
 import com.jotasoft.edensavesync.domain.model.SyncedRecord
+import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
-import androidx.core.content.edit
-import androidx.core.net.toUri
 
 @Singleton
-class AppPreferences @Inject constructor(context: Context) {
+class AppPreferences @Inject constructor(
+    @ApplicationContext context: Context
+) {
 
     companion object {
         const val DEFAULT_GOOGLE_CLIENT_ID =
@@ -117,7 +119,7 @@ class AppPreferences @Inject constructor(context: Context) {
 
     val isGoogleDriveConfigured: Boolean
         get() = googleAccessToken.isNotBlank() ||
-                (googleRefreshToken.isNotBlank() && googleClientId.isNotBlank())
+            (googleRefreshToken.isNotBlank() && googleClientId.isNotBlank())
 
     fun clearGoogleDriveAuth() {
         prefs.edit {
@@ -128,70 +130,16 @@ class AppPreferences @Inject constructor(context: Context) {
         }
     }
 
-    /**
-     * Genera un código compacto `EDEN-SYNC:...` para copiar la configuración de Google Drive
-     * y los nombres personalizados de juegos entre dispositivos.
-     */
-    fun exportPairingCode(): String {
-        val json = JSONObject().apply {
-            put("accessToken", googleAccessToken)
-            put("refreshToken", googleRefreshToken)
-            put("clientId", googleClientId)
-            put("clientSecret", googleClientSecret)
-            put("tokenExpiryMs", googleTokenExpiryMs)
-            put("driveFolderId", driveFolderId)
-            put("customNames", JSONObject(getCustomGameNames()))
-        }
-        val encoded = Base64.encodeToString(
-            json.toString().toByteArray(Charsets.UTF_8),
-            Base64.NO_WRAP
-        )
-        return "EDEN-SYNC:$encoded"
-    }
-
-    fun importPairingCode(rawCode: String): Boolean {
-        return try {
-            val cleaned = rawCode.trim().removePrefix("EDEN-SYNC:").trim()
-            val decodedBytes = Base64.decode(cleaned, Base64.DEFAULT)
-            val json = JSONObject(String(decodedBytes, Charsets.UTF_8))
-
-            googleAccessToken = json.optString("accessToken", "")
-            googleRefreshToken = json.optString("refreshToken", "")
-            googleClientId = json.optString("clientId", "")
-            googleClientSecret = json.optString("clientSecret", "")
-            googleTokenExpiryMs = json.optLong("tokenExpiryMs", 0L)
-            driveFolderId = json.optString("driveFolderId", "")
-
-            json.optJSONObject("customNames")?.let { namesObj ->
-                val keys = namesObj.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    val name = namesObj.optString(key, "")
-                    if (name.isNotBlank()) {
-                        setCustomGameName(key, name)
-                    }
-                }
-            }
-            isGoogleDriveConfigured
-        } catch (_: Exception) {
-            false
-        }
-    }
-
     fun getCustomGameNames(): Map<String, String> {
         val raw = prefs.getString("custom_game_names_json", null) ?: return emptyMap()
-        return try {
+        return runCatching {
             val obj = JSONObject(raw)
-            val map = mutableMapOf<String, String>()
-            val keys = obj.keys()
-            while (keys.hasNext()) {
-                val k = keys.next()
-                map[k.uppercase()] = obj.optString(k, "")
+            buildMap {
+                obj.keys().forEach { k ->
+                    put(k.uppercase(), obj.optString(k, ""))
+                }
             }
-            map
-        } catch (_: Exception) {
-            emptyMap()
-        }
+        }.getOrDefault(emptyMap())
     }
 
     fun setCustomGameName(titleId: String, customName: String) {
@@ -202,9 +150,7 @@ class AppPreferences @Inject constructor(context: Context) {
         } else {
             current[normalized] = customName.trim()
         }
-        val obj = JSONObject()
-        current.forEach { (k, v) -> obj.put(k, v) }
-        prefs.edit { putString("custom_game_names_json", obj.toString()) }
+        prefs.edit { putString("custom_game_names_json", JSONObject(current as Map<*, *>).toString()) }
     }
 
     fun recordSyncedTitle(
@@ -213,9 +159,10 @@ class AppPreferences @Inject constructor(context: Context) {
         remoteTimestampMs: Long,
         localTimestampAtSyncMs: Long
     ) {
+        val normalized = titleId.uppercase()
         val all = getSyncedRecords().toMutableMap()
-        all[titleId.uppercase()] = SyncedRecord(
-            titleId = titleId.uppercase(),
+        all[normalized] = SyncedRecord(
+            titleId = normalized,
             contentHash = contentHash,
             remoteTimestampMs = remoteTimestampMs,
             localTimestampAtSyncMs = localTimestampAtSyncMs
@@ -236,23 +183,23 @@ class AppPreferences @Inject constructor(context: Context) {
 
     fun getSyncedRecords(): Map<String, SyncedRecord> {
         val raw = prefs.getString("synced_records_json", null) ?: return emptyMap()
-        return try {
+        return runCatching {
             val root = JSONObject(raw)
-            val result = mutableMapOf<String, SyncedRecord>()
-            val keys = root.keys()
-            while (keys.hasNext()) {
-                val k = keys.next()
-                val item = root.optJSONObject(k) ?: continue
-                result[k.uppercase()] = SyncedRecord(
-                    titleId = k.uppercase(),
-                    contentHash = item.optString("contentHash", ""),
-                    remoteTimestampMs = item.optLong("remoteTimestampMs", 0L),
-                    localTimestampAtSyncMs = item.optLong("localTimestampAtSyncMs", 0L)
-                )
+            buildMap {
+                root.keys().forEach { k ->
+                    val item = root.optJSONObject(k) ?: return@forEach
+                    val normalized = k.uppercase()
+                    put(
+                        normalized,
+                        SyncedRecord(
+                            titleId = normalized,
+                            contentHash = item.optString("contentHash", ""),
+                            remoteTimestampMs = item.optLong("remoteTimestampMs", 0L),
+                            localTimestampAtSyncMs = item.optLong("localTimestampAtSyncMs", 0L)
+                        )
+                    )
+                }
             }
-            result
-        } catch (_: Exception) {
-            emptyMap()
-        }
+        }.getOrDefault(emptyMap())
     }
 }

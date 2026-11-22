@@ -24,6 +24,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jotasoft.edensavesync.ui.theme.AccentGreen
+import com.jotasoft.edensavesync.ui.theme.BannerErrorBg
+import com.jotasoft.edensavesync.ui.theme.BannerErrorTint
+import com.jotasoft.edensavesync.ui.theme.BannerSuccessBg
 import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
 
 @Composable
@@ -35,14 +38,14 @@ fun SyncSummaryBanner(
 ) {
     AnimatedVisibility(visible = message != null, modifier = modifier) {
         if (message != null) {
-            val bg = if (isError) Color(0xFF7F1D1D) else Color(0xFF14532D)
-            val iconTint = if (isError) Color(0xFFFCA5A5) else AccentGreen
+            val bg = if (isError) BannerErrorBg else BannerSuccessBg
+            val iconTint = if (isError) BannerErrorTint else AccentGreen
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(bg)
-                    .clickable { onDismiss() }
+                    .clickable(onClick = onDismiss)
                     .gamepadFocusable(shape = RoundedCornerShape(12.dp), onClick = onDismiss)
                     .padding(14.dp)
             ) {

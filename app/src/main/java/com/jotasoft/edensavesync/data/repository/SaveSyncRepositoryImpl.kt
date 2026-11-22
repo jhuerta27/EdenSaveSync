@@ -11,7 +11,10 @@ import com.jotasoft.edensavesync.domain.model.SyncSummaryResult
 import com.jotasoft.edensavesync.domain.repository.CloudSyncRepository
 import com.jotasoft.edensavesync.domain.repository.EdenStorageRepository
 import com.jotasoft.edensavesync.domain.repository.SaveSyncRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -20,34 +23,35 @@ import kotlin.coroutines.cancellation.CancellationException
 
 @Singleton
 class SaveSyncRepositoryImpl @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val storageRepo: EdenStorageRepository,
     private val cloudRepo: CloudSyncRepository,
     private val prefs: AppPreferences
 ) : SaveSyncRepository {
 
     override suspend fun scanGames(): Pair<String, List<GameSyncItem>> = withContext(Dispatchers.IO) {
-        SwitchTitleCatalog.init(context, prefs.cachedCatalogJson)
-        runCatching {
-            SwitchTitleCatalog.fetchRemoteCatalog()?.let { (_, rawJson) ->
-                prefs.cachedCatalogJson = rawJson
+        coroutineScope {
+            val catalogJob = async { SwitchTitleCatalog.ensureLoaded(context, prefs) }
+            val localDeferred = async {
+                if (storageRepo.isFolderConfigured()) {
+                    storageRepo.scanLocalSaves()
+                } else {
+                    "" to emptyList()
+                }
             }
-        }
+            val remoteDeferred = async {
+                if (cloudRepo.isConfigured()) {
+                    runCatching { cloudRepo.listRemoteSaves() }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
+            }
 
-        val (profileId, localList) = if (storageRepo.isFolderConfigured()) {
-            storageRepo.scanLocalSaves()
-        } else {
-            "" to emptyList()
+            catalogJob.await()
+            val (profileId, localList) = localDeferred.await()
+            val remoteList = remoteDeferred.await()
+            profileId to mergeLocalAndRemote(localList, remoteList)
         }
-
-        val remoteList = if (cloudRepo.isConfigured()) {
-            runCatching { cloudRepo.listRemoteSaves() }.getOrDefault(emptyList())
-        } else {
-            emptyList()
-        }
-
-        val merged = mergeLocalAndRemote(localList, remoteList)
-        profileId to merged
     }
 
     override suspend fun syncAllRecommended(onProgress: (String) -> Unit): SyncSummaryResult =
@@ -62,26 +66,24 @@ class SaveSyncRepositoryImpl @Inject constructor(
 
             for (item in toUpload) {
                 onProgress("Subiendo ${item.displayName} a Google Drive...")
-                val res = uploadSingleGame(item)
-                if (res.isSuccess) {
-                    uploaded++
-                } else {
-                    val ex = res.exceptionOrNull()
-                    if (ex is CancellationException) throw ex
-                    errors.add("${item.displayName}: ${ex?.message}")
-                }
+                uploadSingleGame(item).fold(
+                    onSuccess = { uploaded++ },
+                    onFailure = { ex ->
+                        if (ex is CancellationException) throw ex
+                        errors.add("${item.displayName}: ${ex.message}")
+                    }
+                )
             }
 
             for (item in toDownload) {
                 onProgress("Descargando ${item.displayName} desde Google Drive...")
-                val res = downloadSingleGame(item)
-                if (res.isSuccess) {
-                    downloaded++
-                } else {
-                    val ex = res.exceptionOrNull()
-                    if (ex is CancellationException) throw ex
-                    errors.add("${item.displayName}: ${ex?.message}")
-                }
+                downloadSingleGame(item).fold(
+                    onSuccess = { downloaded++ },
+                    onFailure = { ex ->
+                        if (ex is CancellationException) throw ex
+                        errors.add("${item.displayName}: ${ex.message}")
+                    }
+                )
             }
 
             SyncSummaryResult(
@@ -101,8 +103,7 @@ class SaveSyncRepositoryImpl @Inject constructor(
             }
             val tempZip = File(context.cacheDir, "upload_${item.titleId}.zip")
             try {
-                val exported = storageRepo.exportSaveToZip(item.titleId, tempZip)
-                if (!exported) {
+                if (!storageRepo.exportSaveToZip(item.titleId, tempZip)) {
                     throw IllegalStateException("No se pudo empaquetar la partida local de ${item.titleId}")
                 }
                 val remote = cloudRepo.uploadSaveZip(
@@ -131,23 +132,18 @@ class SaveSyncRepositoryImpl @Inject constructor(
             val tempZip = File(context.cacheDir, "download_${item.titleId}.zip")
             try {
                 cloudRepo.downloadSaveZip(remote.driveFileId, tempZip)
-                val imported = storageRepo.importSaveFromZip(item.titleId, tempZip)
-                if (!imported) {
+                if (!storageRepo.importSaveFromZip(item.titleId, tempZip)) {
                     throw IllegalStateException("No se pudo escribir en la carpeta de Eden para ${item.titleId}")
                 }
-                if (remote.gameName.isNotBlank() && prefs.getCustomGameNames()[item.titleId].isNullOrBlank()) {
-                    if (!remote.gameName.startsWith("Juego de Switch")) {
-                        prefs.setCustomGameName(item.titleId, remote.gameName)
-                    }
+                if (remote.gameName.isNotBlank() &&
+                    !remote.gameName.startsWith("Juego de Switch") &&
+                    prefs.getCustomGameNames()[item.titleId].isNullOrBlank()
+                ) {
+                    prefs.setCustomGameName(item.titleId, remote.gameName)
                 }
-                val (_, updatedLocals) = storageRepo.scanLocalSaves()
-                val updatedLocal = updatedLocals.firstOrNull { it.titleId.equals(item.titleId, ignoreCase = true) }
+                val updatedLocal = storageRepo.scanSingleSave(item.titleId)
                 val effectiveHash = updatedLocal?.contentHash?.takeIf { it.isNotBlank() } ?: remote.contentHash
-                val effectiveLocalTs = if (updatedLocal != null && updatedLocal.lastModifiedMs > 0L) {
-                    updatedLocal.lastModifiedMs
-                } else {
-                    remote.lastModifiedMs
-                }
+                val effectiveLocalTs = updatedLocal?.lastModifiedMs?.takeIf { it > 0L } ?: remote.lastModifiedMs
                 prefs.recordSyncedTitle(
                     titleId = item.titleId,
                     contentHash = effectiveHash,
@@ -162,8 +158,7 @@ class SaveSyncRepositoryImpl @Inject constructor(
 
     override suspend fun restoreLatestBackup(item: GameSyncItem): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val ok = storageRepo.restoreLatestBackup(item.titleId)
-            if (!ok) {
+            if (!storageRepo.restoreLatestBackup(item.titleId)) {
                 throw IllegalStateException("No se pudo restaurar la copia de seguridad de ${item.titleId}")
             }
         }.onFailure { if (it is CancellationException) throw it }
@@ -180,6 +175,6 @@ class SaveSyncRepositoryImpl @Inject constructor(
         remotes = remotes,
         syncedRecords = prefs.getSyncedRecords(),
         customNames = prefs.getCustomGameNames(),
-        getLocalBackupCount = { storageRepo.getLocalBackupCount(it) }
+        getLocalBackupCount = storageRepo::getLocalBackupCount
     )
 }

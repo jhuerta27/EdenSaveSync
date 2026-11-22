@@ -27,7 +27,6 @@
         <package android:name="dev.eden.eden_emulator" />
         <package android:name="dev.eden.eden_emulator.ea" />
         <package android:name="org.yuzu.yuzu_emu" />
-        <package android:name="moe.shizuku.privileged.api" />
         <intent>
             <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
         </intent>
@@ -42,7 +41,6 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:resizeableActivity="true"
-        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.EdenSaveSync">
 
         <activity

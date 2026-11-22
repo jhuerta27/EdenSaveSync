@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jotasoft.edensavesync.R
 import com.jotasoft.edensavesync.ui.theme.AccentCyan
+import com.jotasoft.edensavesync.ui.theme.HeroActiveGradient
+import com.jotasoft.edensavesync.ui.theme.HeroIdleGradient
+import com.jotasoft.edensavesync.ui.theme.OnAccentCyan
 import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
 
 @Composable
@@ -55,11 +58,7 @@ fun OneTouchSyncHeroCard(
             .fillMaxWidth()
             .background(
                 brush = Brush.horizontalGradient(
-                    colors = if (hasChanges) {
-                        listOf(Color(0xFF1E3A8A), Color(0xFF4C1D95))
-                    } else {
-                        listOf(Color(0xFF132A3E), Color(0xFF1E293B))
-                    }
+                    colors = if (hasChanges) HeroActiveGradient else HeroIdleGradient
                 ),
                 shape = RoundedCornerShape(18.dp)
             )
@@ -111,7 +110,6 @@ fun OneTouchSyncHeroCard(
                                 uploadCount,
                                 downloadCount
                             )
-
                             else -> stringResource(R.string.hero_subtitle_up_to_date)
                         },
                         color = Color.White.copy(alpha = 0.85f),
@@ -128,7 +126,7 @@ fun OneTouchSyncHeroCard(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AccentCyan,
-                    contentColor = Color(0xFF082F49)
+                    contentColor = OnAccentCyan
                 ),
                 modifier = Modifier
                     .fillMaxWidth()

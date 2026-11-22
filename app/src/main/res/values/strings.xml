@@ -2,7 +2,6 @@
 <resources>
     <!-- App & General -->
     <string name="app_name">Eden Save Sync</string>
-    <string name="action_refresh">Refresh</string>
     <string name="action_settings">Settings</string>
     <string name="settings_title">Settings</string>
     <string name="action_back">Back</string>
@@ -105,12 +104,6 @@
     <string name="dialog_rename_title">Game Name (%1$s)</string>
     <string name="dialog_rename_label">Custom name</string>
 
-    <!-- Backup History Dialog -->
-    <string name="dialog_backup_title">Backups (%1$s)</string>
-    <string name="dialog_backup_count">%1$d local backups saved on this device before overwriting.</string>
-    <string name="dialog_backup_info">The app automatically retains the last 5 backups as ZIP files in secure app storage.</string>
-    <string name="dialog_backup_restore_button">Restore latest</string>
-
     <!-- Formats & Misc -->
     <string name="time_unknown">Unknown</string>
     <string name="switch_game_fallback">Switch Game (%1$s)</string>
@@ -120,12 +113,9 @@
 
     <!-- ViewModel Status & Toast Messages -->
     <string name="msg_folder_linked">Eden folder linked successfully.</string>
-    <string name="msg_credentials_saved">Google Drive credentials saved.</string>
     <string name="msg_waiting_browser_auth">Waiting for Google authorization in browser...</string>
     <string name="msg_drive_connected">Google Drive account connected successfully!</string>
     <string name="msg_drive_auth_error">Error authorizing Google Drive</string>
-    <string name="msg_pairing_imported">Pairing imported successfully. Both devices now share Google Drive.</string>
-    <string name="msg_pairing_invalid">The pairing code is invalid.</string>
     <string name="msg_drive_disconnected">Google Drive account disconnected.</string>
     <string name="msg_link_folder_first">Please link the Eden saves folder first.</string>
     <string name="msg_connect_drive_first">Please connect your Google Drive account first.</string>

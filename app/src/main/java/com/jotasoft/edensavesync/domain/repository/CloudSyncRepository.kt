@@ -15,5 +15,4 @@ interface CloudSyncRepository {
         existingDriveFileId: String?
     ): RemoteSaveGame
     suspend fun downloadSaveZip(driveFileId: String, destZipFile: File)
-    fun disconnect()
 }

@@ -24,7 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +35,8 @@ import com.jotasoft.edensavesync.ui.theme.AccentAmber
 import com.jotasoft.edensavesync.ui.theme.AccentGreen
 import com.jotasoft.edensavesync.ui.theme.CardBorder
 import com.jotasoft.edensavesync.ui.theme.CardDark
+import com.jotasoft.edensavesync.ui.theme.StatusConnectedBg
+import com.jotasoft.edensavesync.ui.theme.StatusDisconnectedBg
 import com.jotasoft.edensavesync.ui.theme.TextPrimary
 import com.jotasoft.edensavesync.ui.theme.TextSecondary
 import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
@@ -60,93 +62,27 @@ fun SetupStatusCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Botón Carpeta de Eden
-                Surface(
+                SetupStatusTile(
+                    isConnected = edenConnected,
+                    icon = Icons.Default.FolderOpen,
+                    title = stringResource(R.string.setup_eden_folder_title),
+                    subtitle = stringResource(
+                        if (edenConnected) R.string.setup_eden_folder_linked else R.string.setup_eden_folder_unlinked
+                    ),
                     onClick = onConfigureEdenClick,
-                    color = if (edenConnected) Color(0xFF0E2A25) else Color(0xFF271F16),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        if (edenConnected) AccentGreen.copy(alpha = 0.6f) else AccentAmber.copy(
-                            alpha = 0.6f
-                        )
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .gamepadFocusable(shape = RoundedCornerShape(12.dp), onClick = onConfigureEdenClick)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FolderOpen,
-                            contentDescription = null,
-                            tint = if (edenConnected) AccentGreen else AccentAmber
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.setup_eden_folder_title),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = if (edenConnected) stringResource(R.string.setup_eden_folder_linked) else stringResource(
-                                    R.string.setup_eden_folder_unlinked
-                                ),
-                                fontSize = 11.sp,
-                                color = if (edenConnected) AccentGreen else AccentAmber
-                            )
-                        }
-                    }
-                }
+                    modifier = Modifier.weight(1f)
+                )
 
-                // Botón Google Drive
-                Surface(
-                    onClick = onConfigureDriveClick,
-                    color = if (driveConnected) Color(0xFF0E2A25) else Color(0xFF271F16),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        if (driveConnected) AccentGreen.copy(alpha = 0.6f) else AccentAmber.copy(
-                            alpha = 0.6f
-                        )
+                SetupStatusTile(
+                    isConnected = driveConnected,
+                    icon = if (driveConnected) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                    title = stringResource(R.string.setup_drive_title),
+                    subtitle = stringResource(
+                        if (driveConnected) R.string.setup_drive_connected else R.string.setup_drive_disconnected
                     ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .gamepadFocusable(shape = RoundedCornerShape(12.dp), onClick = onConfigureDriveClick)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (driveConnected) Icons.Default.CloudDone else Icons.Default.CloudOff,
-                            contentDescription = null,
-                            tint = if (driveConnected) AccentGreen else AccentAmber
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.setup_drive_title),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = if (driveConnected) stringResource(R.string.setup_drive_connected) else stringResource(
-                                    R.string.setup_drive_disconnected
-                                ),
-                                fontSize = 11.sp,
-                                color = if (driveConnected) AccentGreen else AccentAmber
-                            )
-                        }
-                    }
-                }
+                    onClick = onConfigureDriveClick,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             if (activeProfileId.isNotBlank()) {
@@ -160,6 +96,53 @@ fun SetupStatusCard(
                     fontSize = 11.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupStatusTile(
+    isConnected: Boolean,
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = if (isConnected) AccentGreen else AccentAmber
+    val shape = RoundedCornerShape(12.dp)
+    Surface(
+        onClick = onClick,
+        color = if (isConnected) StatusConnectedBg else StatusDisconnectedBg,
+        shape = shape,
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.6f)),
+        modifier = modifier
+            .clip(shape)
+            .gamepadFocusable(shape = shape, onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accent
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = TextPrimary
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    color = accent
                 )
             }
         }

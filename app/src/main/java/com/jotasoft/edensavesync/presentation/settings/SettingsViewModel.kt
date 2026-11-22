@@ -32,16 +32,7 @@ class SettingsViewModel @Inject constructor(
 
     fun onToggleScheduledSync(enabled: Boolean) {
         appPreferences.isScheduledSyncEnabled = enabled
-        if (enabled) {
-            appPreferences.lastScheduledSyncDate = ""
-            scheduledSyncScheduler.cancelDailySync()
-            scheduledSyncScheduler.scheduleDailySync(
-                hour = appPreferences.scheduledSyncHour,
-                minute = appPreferences.scheduledSyncMinute
-            )
-        } else {
-            scheduledSyncScheduler.cancelDailySync()
-        }
+        scheduledSyncScheduler.applyConfiguration(resetLastSyncDate = enabled)
         _uiState.update { it.copy(isScheduledSyncEnabled = enabled) }
     }
 
@@ -53,18 +44,11 @@ class SettingsViewModel @Inject constructor(
     fun onSetScheduledTime(hour: Int, minute: Int) {
         appPreferences.scheduledSyncHour = hour
         appPreferences.scheduledSyncMinute = minute
-        appPreferences.lastScheduledSyncDate = ""
-        if (appPreferences.isScheduledSyncEnabled) {
-            scheduledSyncScheduler.cancelDailySync()
-            scheduledSyncScheduler.scheduleDailySync(hour = hour, minute = minute)
-        }
+        scheduledSyncScheduler.applyConfiguration(resetLastSyncDate = true)
         _uiState.update { it.copy(scheduledHour = hour, scheduledMinute = minute) }
     }
 
-    private fun resolveAppVersion(): String = try {
-        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-        pInfo.versionName ?: "1.0.1"
-    } catch (_: Exception) {
-        "1.0.1"
-    }
+    private fun resolveAppVersion(): String = runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.1"
+    }.getOrDefault("1.0.1")
 }

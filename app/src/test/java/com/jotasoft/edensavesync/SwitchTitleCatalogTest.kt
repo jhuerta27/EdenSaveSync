@@ -17,8 +17,8 @@ class SwitchTitleCatalogTest {
 
     @Test
     fun catalogJsonFile_isValidAndContainsExpectedTitles() {
-        val file = File("../catalog/titles.json").takeIf { it.exists() }
-            ?: File("catalog/titles.json")
+        val file = File("src/main/assets/titles.json").takeIf { it.exists() }
+            ?: File("app/src/main/assets/titles.json")
         val content = file.readText()
         val parsed = SwitchTitleCatalog.parseCatalogJson(content)
         assertNotNull(parsed)

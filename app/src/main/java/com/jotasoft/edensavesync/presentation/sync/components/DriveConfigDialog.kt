@@ -21,13 +21,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jotasoft.edensavesync.R
+import com.jotasoft.edensavesync.ui.theme.DangerRed
 import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
 
 @Composable
@@ -89,7 +89,7 @@ fun DriveConfigDialog(
                         ) {
                             Text(
                                 stringResource(R.string.dialog_drive_disconnect_button),
-                                color = Color(0xFFEF4444)
+                                color = DangerRed
                             )
                         }
                     }

@@ -31,6 +31,12 @@ class EdenStorageRepositoryImpl @Inject constructor(
             storageManager.scanLocalSaves(uri)
         }
 
+    override suspend fun scanSingleSave(titleId: String): LocalSaveGame? =
+        withContext(Dispatchers.IO) {
+            val uri = prefs.edenTreeUri ?: return@withContext null
+            storageManager.scanSingleTitleSave(uri, titleId)
+        }
+
     override suspend fun exportSaveToZip(titleId: String, destZipFile: File): Boolean =
         withContext(Dispatchers.IO) {
             val uri = prefs.edenTreeUri ?: return@withContext false

@@ -9,18 +9,36 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.jotasoft.edensavesync.data.notification.SyncNotificationManager
 import com.jotasoft.edensavesync.data.storage.AppPreferences
+import com.jotasoft.edensavesync.domain.usecase.SyncAllRecommendedUseCase
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
+import kotlin.math.min
 
 @Singleton
 class ScheduledSyncScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    private val syncAllRecommendedUseCase: SyncAllRecommendedUseCase,
+    private val syncNotificationManager: SyncNotificationManager
 ) {
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface SchedulerEntryPoint {
+        fun scheduler(): ScheduledSyncScheduler
+    }
+
     companion object {
         const val WORK_NAME = "EdenScheduledSyncWork"
         const val ALARM_ACTION = "com.jotasoft.edensavesync.ACTION_SCHEDULED_SYNC"
@@ -31,19 +49,16 @@ class ScheduledSyncScheduler @Inject constructor(
             targetMinute: Int,
             nowMs: Long = System.currentTimeMillis()
         ): Long {
-            val nowCalendar = Calendar.getInstance().apply { timeInMillis = nowMs }
             val targetCalendar = Calendar.getInstance().apply {
                 timeInMillis = nowMs
                 set(Calendar.HOUR_OF_DAY, targetHour)
                 set(Calendar.MINUTE, targetMinute)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
+                if (timeInMillis <= nowMs) {
+                    add(Calendar.DAY_OF_YEAR, 1)
+                }
             }
-
-            if (targetCalendar.timeInMillis <= nowCalendar.timeInMillis) {
-                targetCalendar.add(Calendar.DAY_OF_YEAR, 1)
-            }
-
             return targetCalendar.timeInMillis
         }
 
@@ -62,32 +77,20 @@ class ScheduledSyncScheduler @Inject constructor(
             val cal = Calendar.getInstance().apply { timeInMillis = nowMs }
             val currentMinutesOfDay = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
             val targetMinutesOfDay = targetHour * 60 + targetMinute
-            val diff = kotlin.math.abs(currentMinutesOfDay - targetMinutesOfDay)
-            val circularDiff = kotlin.math.min(diff, 1440 - diff)
-            return circularDiff <= toleranceMinutes
+            val diff = abs(currentMinutesOfDay - targetMinutesOfDay)
+            return min(diff, 1440 - diff) <= toleranceMinutes
         }
     }
 
     fun scheduleDailySync(hour: Int, minute: Int) {
-        // Cancelar de forma explícita y completa cualquier alarma o tarea previa
         cancelDailySync()
 
         val targetTimeMs = calculateTargetTimeMs(hour, minute)
-        val initialDelay = targetTimeMs - System.currentTimeMillis()
+        val initialDelay = (targetTimeMs - System.currentTimeMillis()).coerceAtLeast(0L)
 
-        // 1. Programar Alarma Exacta en AlarmManager (despierta al dispositivo con app cerrada)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (alarmManager != null) {
-            val intent = Intent(context, ScheduledSyncReceiver::class.java).apply {
-                action = ALARM_ACTION
-            }
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                ALARM_REQUEST_CODE,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
+            val pendingIntent = buildAlarmPendingIntent()
             val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             val showIntent = PendingIntent.getActivity(
                 context,
@@ -95,17 +98,15 @@ class ScheduledSyncScheduler @Inject constructor(
                 launchIntent ?: Intent(context, ScheduledSyncReceiver::class.java),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val alarmClockInfo = AlarmManager.AlarmClockInfo(targetTimeMs, showIntent)
-            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(targetTimeMs, showIntent), pendingIntent)
         }
 
-        // 2. Programar además WorkManager como respaldo periódico con cancelación previa
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
         val workRequest = PeriodicWorkRequestBuilder<ScheduledSyncWorker>(24, TimeUnit.HOURS)
-            .setInitialDelay(initialDelay.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+            .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
             .setConstraints(constraints)
             .build()
 
@@ -119,22 +120,17 @@ class ScheduledSyncScheduler @Inject constructor(
     fun cancelDailySync() {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (alarmManager != null) {
-            val intent = Intent(context, ScheduledSyncReceiver::class.java).apply {
-                action = ALARM_ACTION
-            }
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                ALARM_REQUEST_CODE,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            val pendingIntent = buildAlarmPendingIntent()
             alarmManager.cancel(pendingIntent)
             pendingIntent.cancel()
         }
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
     }
 
-    fun applyConfiguration() {
+    fun applyConfiguration(resetLastSyncDate: Boolean = false) {
+        if (resetLastSyncDate) {
+            appPreferences.lastScheduledSyncDate = ""
+        }
         if (appPreferences.isScheduledSyncEnabled) {
             scheduleDailySync(
                 hour = appPreferences.scheduledSyncHour,
@@ -144,4 +140,37 @@ class ScheduledSyncScheduler @Inject constructor(
             cancelDailySync()
         }
     }
+
+    suspend fun executeScheduledSyncIfDue(requireExactTimeWindow: Boolean): Boolean {
+        if (!appPreferences.isScheduledSyncEnabled) {
+            cancelDailySync()
+            return true
+        }
+        if (requireExactTimeWindow && !isTimeMatchingSchedule(
+                targetHour = appPreferences.scheduledSyncHour,
+                targetMinute = appPreferences.scheduledSyncMinute
+            )
+        ) {
+            return true
+        }
+
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        if (appPreferences.lastScheduledSyncDate == today) {
+            return true
+        }
+        appPreferences.lastScheduledSyncDate = today
+
+        val summary = syncAllRecommendedUseCase()
+        if (appPreferences.isScheduledSyncNotificationEnabled) {
+            syncNotificationManager.showSyncResultNotification(summary)
+        }
+        return summary.errors.isEmpty()
+    }
+
+    private fun buildAlarmPendingIntent(): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        ALARM_REQUEST_CODE,
+        Intent(context, ScheduledSyncReceiver::class.java).apply { action = ALARM_ACTION },
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
 }

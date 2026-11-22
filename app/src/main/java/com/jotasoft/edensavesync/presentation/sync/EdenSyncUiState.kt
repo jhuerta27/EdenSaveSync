@@ -2,6 +2,8 @@ package com.jotasoft.edensavesync.presentation.sync
 
 import android.net.Uri
 import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import com.jotasoft.edensavesync.domain.model.GameSyncItem
 
 data class StringResource(
@@ -18,6 +20,13 @@ data class StringResource(
     }
 }
 
+@Composable
+fun StringResource.asString(): String? = when {
+    resId != 0 && args.isEmpty() -> stringResource(resId)
+    resId != 0 -> stringResource(resId, *args.toTypedArray())
+    else -> text
+}
+
 data class EdenSyncUiState(
     val deviceName: String = "",
     val edenFolderUri: Uri? = null,
@@ -28,7 +37,5 @@ data class EdenSyncUiState(
     val syncProgressMessage: StringResource? = null,
     val statusBannerMessage: StringResource? = null,
     val isStatusError: Boolean = false,
-    val games: List<GameSyncItem> = emptyList(),
-    val googleClientId: String = "",
-    val googleClientSecret: String = ""
+    val games: List<GameSyncItem> = emptyList()
 )
