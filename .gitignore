@@ -17,5 +17,12 @@ local.properties
 /keystore/
 *.jks
 *.keystore
-/keystore/
 /gcloud/
+
+# AI agent rules, templates and feature specs (local only)
+/AGENTS.md
+/docs/GENERIC_RULES.md
+/docs/MOBILE_GUIDELINES.md
+/docs/SPEC_TEMPLATE.md
+/docs/PLAN_TEMPLATE.md
+/docs/features/

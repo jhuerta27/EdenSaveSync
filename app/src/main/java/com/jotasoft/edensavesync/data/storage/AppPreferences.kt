@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.jotasoft.edensavesync.data.device.DeviceDetector
+import com.jotasoft.edensavesync.domain.model.BackgroundSyncMode
 import com.jotasoft.edensavesync.domain.model.SyncedRecord
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
@@ -91,6 +92,22 @@ class AppPreferences @Inject constructor(
         get() = prefs.getBoolean("is_scheduled_sync_enabled", false)
         set(value) {
             prefs.edit { putBoolean("is_scheduled_sync_enabled", value) }
+        }
+
+    var backgroundSyncMode: BackgroundSyncMode
+        get() = when (prefs.getString("background_sync_mode", null)) {
+            BackgroundSyncMode.SCHEDULED.name -> BackgroundSyncMode.SCHEDULED
+            BackgroundSyncMode.AUTOMATIC.name -> BackgroundSyncMode.AUTOMATIC
+            else -> BackgroundSyncMode.AUTOMATIC
+        }
+        set(value) {
+            prefs.edit { putString("background_sync_mode", value.name) }
+        }
+
+    var lastAutoSyncCheckMs: Long
+        get() = prefs.getLong("last_auto_sync_check_ms", 0L)
+        set(value) {
+            prefs.edit { putLong("last_auto_sync_check_ms", value) }
         }
 
     var scheduledSyncHour: Int

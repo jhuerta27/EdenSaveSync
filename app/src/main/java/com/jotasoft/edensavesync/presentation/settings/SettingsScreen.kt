@@ -3,6 +3,7 @@ package com.jotasoft.edensavesync.presentation.settings
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.KeyEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -31,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Schedule
@@ -42,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -61,7 +64,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +77,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jotasoft.edensavesync.R
+import com.jotasoft.edensavesync.domain.model.BackgroundSyncMode
 import com.jotasoft.edensavesync.ui.theme.AccentCyan
 import com.jotasoft.edensavesync.ui.theme.BgDark
 import com.jotasoft.edensavesync.ui.theme.BindGamepadScroll
@@ -95,6 +102,7 @@ fun SettingsScreen(
     SettingsContent(
         uiState = uiState,
         onToggleScheduledSync = viewModel::onToggleScheduledSync,
+        onSelectSyncMode = viewModel::onSelectSyncMode,
         onSetScheduledTime = viewModel::onSetScheduledTime,
         onToggleNotification = viewModel::onToggleNotification,
         onNavigateBack = onNavigateBack,
@@ -110,7 +118,8 @@ fun SettingsContent(
     onSetScheduledTime: (hour: Int, minute: Int) -> Unit,
     onToggleNotification: (Boolean) -> Unit,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSelectSyncMode: (BackgroundSyncMode) -> Unit = {}
 ) {
     var showTimePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -141,8 +150,26 @@ fun SettingsContent(
 
     val backButtonFocusRequester = remember { FocusRequester() }
     val switchFocusRequester = remember { FocusRequester() }
+    val autoModeFocusRequester = remember { FocusRequester() }
+    val scheduledModeFocusRequester = remember { FocusRequester() }
     val timePickerFocusRequester = remember { FocusRequester() }
     val notifyFocusRequester = remember { FocusRequester() }
+
+    val activeModeFocusRequester = if (uiState.syncMode == BackgroundSyncMode.AUTOMATIC) {
+        autoModeFocusRequester
+    } else {
+        scheduledModeFocusRequester
+    }
+    val downFromModeSelector = if (uiState.syncMode == BackgroundSyncMode.SCHEDULED) {
+        timePickerFocusRequester
+    } else {
+        notifyFocusRequester
+    }
+    val upFromNotifyRow = if (uiState.syncMode == BackgroundSyncMode.SCHEDULED) {
+        timePickerFocusRequester
+    } else {
+        activeModeFocusRequester
+    }
 
     Scaffold(
         containerColor = BgDark,
@@ -221,7 +248,7 @@ fun SettingsContent(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Schedule,
+                                    imageVector = Icons.Default.CloudSync,
                                     contentDescription = null,
                                     tint = AccentCyan,
                                     modifier = Modifier.size(22.dp)
@@ -251,7 +278,7 @@ fun SettingsContent(
                                         .dpadVerticalNavigation(
                                             requester = switchFocusRequester,
                                             up = backButtonFocusRequester,
-                                            down = timePickerFocusRequester.takeIf { uiState.isScheduledSyncEnabled }
+                                            down = activeModeFocusRequester.takeIf { uiState.isScheduledSyncEnabled }
                                         )
                                         .gamepadFocusable(
                                             shape = CircleShape,
@@ -274,59 +301,154 @@ fun SettingsContent(
                             exit = fadeOut() + shrinkVertically()
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(SurfaceDark)
                                         .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
-                                        .dpadVerticalNavigation(
-                                            requester = timePickerFocusRequester,
-                                            up = switchFocusRequester,
-                                            down = notifyFocusRequester
-                                        )
-                                        .clickable { showTimePicker = true }
-                                        .gamepadFocusable(
-                                            shape = RoundedCornerShape(12.dp),
-                                            borderColor = EdenPurple,
-                                            onClick = { showTimePicker = true }
-                                        )
-                                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.Schedule,
-                                            contentDescription = null,
-                                            tint = EdenPurple,
-                                            modifier = Modifier.size(20.dp)
+                                    Text(
+                                        text = stringResource(R.string.settings_sync_mode_label),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        SyncModeOptionPill(
+                                            selected = uiState.syncMode == BackgroundSyncMode.AUTOMATIC,
+                                            icon = Icons.Default.CloudSync,
+                                            label = stringResource(R.string.settings_sync_mode_auto),
+                                            accentColor = AccentCyan,
+                                            onClick = { onSelectSyncMode(BackgroundSyncMode.AUTOMATIC) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .dpadVerticalNavigation(
+                                                    requester = autoModeFocusRequester,
+                                                    up = switchFocusRequester,
+                                                    down = downFromModeSelector
+                                                )
+                                                .focusProperties { right = scheduledModeFocusRequester }
+                                                .onKeyEvent { keyEvent ->
+                                                    val native = keyEvent.nativeKeyEvent
+                                                    if (native.action == KeyEvent.ACTION_DOWN &&
+                                                        native.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                                                    ) {
+                                                        scheduledModeFocusRequester.requestFocus()
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
+                                                }
                                         )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = stringResource(R.string.settings_scheduled_time_title),
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = TextPrimary
+
+                                        SyncModeOptionPill(
+                                            selected = uiState.syncMode == BackgroundSyncMode.SCHEDULED,
+                                            icon = Icons.Default.Schedule,
+                                            label = stringResource(R.string.settings_sync_mode_scheduled),
+                                            accentColor = EdenPurple,
+                                            onClick = { onSelectSyncMode(BackgroundSyncMode.SCHEDULED) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .dpadVerticalNavigation(
+                                                    requester = scheduledModeFocusRequester,
+                                                    up = switchFocusRequester,
+                                                    down = downFromModeSelector
+                                                )
+                                                .focusProperties { left = autoModeFocusRequester }
+                                                .onKeyEvent { keyEvent ->
+                                                    val native = keyEvent.nativeKeyEvent
+                                                    if (native.action == KeyEvent.ACTION_DOWN &&
+                                                        native.keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                                                    ) {
+                                                        autoModeFocusRequester.requestFocus()
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
+                                                }
                                         )
                                     }
-                                    Box(
+
+                                    Text(
+                                        text = stringResource(
+                                            if (uiState.syncMode == BackgroundSyncMode.AUTOMATIC) {
+                                                R.string.settings_sync_mode_auto_desc
+                                            } else {
+                                                R.string.settings_sync_mode_scheduled_desc
+                                            }
+                                        ),
+                                        fontSize = 12.sp,
+                                        color = TextSecondary,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+
+                                AnimatedVisibility(
+                                    visible = uiState.syncMode == BackgroundSyncMode.SCHEDULED,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically()
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(EdenPurple.copy(alpha = 0.15f))
-                                            .border(
-                                                1.dp,
-                                                EdenPurple.copy(alpha = 0.5f),
-                                                RoundedCornerShape(8.dp)
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(SurfaceDark)
+                                            .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
+                                            .dpadVerticalNavigation(
+                                                requester = timePickerFocusRequester,
+                                                up = scheduledModeFocusRequester,
+                                                down = notifyFocusRequester
                                             )
-                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                            .clickable { showTimePicker = true }
+                                            .gamepadFocusable(
+                                                shape = RoundedCornerShape(12.dp),
+                                                borderColor = EdenPurple,
+                                                onClick = { showTimePicker = true }
+                                            )
+                                            .padding(horizontal = 14.dp, vertical = 12.dp)
                                     ) {
-                                        Text(
-                                            text = uiState.formattedTime,
-                                            color = EdenPurple,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Schedule,
+                                                contentDescription = null,
+                                                tint = EdenPurple,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = stringResource(R.string.settings_scheduled_time_title),
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = TextPrimary
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(EdenPurple.copy(alpha = 0.15f))
+                                                .border(
+                                                    1.dp,
+                                                    EdenPurple.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = uiState.formattedTime,
+                                                color = EdenPurple,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp
+                                            )
+                                        }
                                     }
                                 }
 
@@ -339,7 +461,7 @@ fun SettingsContent(
                                         .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
                                         .dpadVerticalNavigation(
                                             requester = notifyFocusRequester,
-                                            up = timePickerFocusRequester
+                                            up = upFromNotifyRow
                                         )
                                         .clickable { handleNotificationToggle(!uiState.isNotificationEnabled) }
                                         .gamepadFocusable(
@@ -507,6 +629,54 @@ fun SettingsContent(
                 },
                 containerColor = CardDark,
                 shape = RoundedCornerShape(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SyncModeOptionPill(
+    selected: Boolean,
+    icon: ImageVector,
+    label: String,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Surface(
+        onClick = onClick,
+        shape = shape,
+        color = if (selected) accentColor.copy(alpha = 0.18f) else CardDark,
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) accentColor else CardBorder
+        ),
+        modifier = modifier
+            .clip(shape)
+            .gamepadFocusable(
+                shape = shape,
+                borderColor = accentColor,
+                onClick = onClick
+            )
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) accentColor else TextSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) TextPrimary else TextSecondary
             )
         }
     }

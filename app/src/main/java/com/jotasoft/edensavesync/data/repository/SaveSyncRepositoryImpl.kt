@@ -2,6 +2,7 @@ package com.jotasoft.edensavesync.data.repository
 
 import android.content.Context
 import com.jotasoft.edensavesync.data.catalog.SwitchTitleCatalog
+import com.jotasoft.edensavesync.data.scheduler.ScheduledSyncScheduler
 import com.jotasoft.edensavesync.data.storage.AppPreferences
 import com.jotasoft.edensavesync.domain.model.GameSyncItem
 import com.jotasoft.edensavesync.domain.model.LocalSaveGame
@@ -15,6 +16,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -55,44 +57,77 @@ class SaveSyncRepositoryImpl @Inject constructor(
     }
 
     override suspend fun syncAllRecommended(onProgress: (String) -> Unit): SyncSummaryResult =
-        withContext(Dispatchers.IO) {
-            val (_, games) = scanGames()
-            val toUpload = games.filter { it.recommendation == SyncRecommendation.UPLOAD_TO_CLOUD }
-            val toDownload = games.filter { it.recommendation == SyncRecommendation.DOWNLOAD_FROM_CLOUD }
+        syncAllRecommended(ensureLocalStability = false, onProgress = onProgress)
 
-            var uploaded = 0
-            var downloaded = 0
-            val errors = mutableListOf<String>()
+    override suspend fun syncAllRecommended(
+        ensureLocalStability: Boolean,
+        onProgress: (String) -> Unit
+    ): SyncSummaryResult = withContext(Dispatchers.IO) {
+        if (!storageRepo.isFolderConfigured() || !cloudRepo.isConfigured()) {
+            return@withContext SyncSummaryResult(0, 0, 0, emptyList())
+        }
 
-            for (item in toUpload) {
-                onProgress("Subiendo ${item.displayName} a Google Drive...")
-                uploadSingleGame(item).fold(
-                    onSuccess = { uploaded++ },
-                    onFailure = { ex ->
-                        if (ex is CancellationException) throw ex
-                        errors.add("${item.displayName}: ${ex.message}")
-                    }
-                )
+        val (_, games) = scanGames()
+        val toUpload = games.filter { it.recommendation == SyncRecommendation.UPLOAD_TO_CLOUD }
+        val toDownload = games.filter { it.recommendation == SyncRecommendation.DOWNLOAD_FROM_CLOUD }
+
+        var uploaded = 0
+        var downloaded = 0
+        val errors = mutableListOf<String>()
+
+        for (item in toUpload) {
+            val uploadTarget = if (ensureLocalStability) {
+                val initialLocal = item.localSave ?: continue
+                val now = System.currentTimeMillis()
+                val remainingCooldown = if (initialLocal.lastModifiedMs > 0L) {
+                    (ScheduledSyncScheduler.AUTO_UPLOAD_COOLDOWN_MS - (now - initialLocal.lastModifiedMs))
+                        .coerceIn(2_000L, ScheduledSyncScheduler.AUTO_UPLOAD_COOLDOWN_MS)
+                } else {
+                    2_000L
+                }
+                delay(remainingCooldown)
+                val recheckedLocal = storageRepo.scanSingleSave(item.titleId)
+                if (!ScheduledSyncScheduler.isLocalSaveStableForAutoUpload(
+                        initial = initialLocal,
+                        rechecked = recheckedLocal,
+                        nowMs = System.currentTimeMillis()
+                    )
+                ) {
+                    continue
+                }
+                item.copy(localSave = recheckedLocal)
+            } else {
+                item
             }
 
-            for (item in toDownload) {
-                onProgress("Descargando ${item.displayName} desde Google Drive...")
-                downloadSingleGame(item).fold(
-                    onSuccess = { downloaded++ },
-                    onFailure = { ex ->
-                        if (ex is CancellationException) throw ex
-                        errors.add("${item.displayName}: ${ex.message}")
-                    }
-                )
-            }
-
-            SyncSummaryResult(
-                uploadedCount = uploaded,
-                downloadedCount = downloaded,
-                skippedCount = games.size - (toUpload.size + toDownload.size),
-                errors = errors
+            onProgress("Subiendo ${uploadTarget.displayName} a Google Drive...")
+            uploadSingleGame(uploadTarget).fold(
+                onSuccess = { uploaded++ },
+                onFailure = { ex ->
+                    if (ex is CancellationException) throw ex
+                    errors.add("${uploadTarget.displayName}: ${ex.message}")
+                }
             )
         }
+
+        for (item in toDownload) {
+            onProgress("Descargando ${item.displayName} desde Google Drive...")
+            downloadSingleGame(item).fold(
+                onSuccess = { downloaded++ },
+                onFailure = { ex ->
+                    if (ex is CancellationException) throw ex
+                    errors.add("${item.displayName}: ${ex.message}")
+                }
+            )
+        }
+
+        SyncSummaryResult(
+            uploadedCount = uploaded,
+            downloadedCount = downloaded,
+            skippedCount = games.size - (uploaded + downloaded),
+            errors = errors
+        )
+    }
 
     override suspend fun uploadSingleGame(item: GameSyncItem): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {

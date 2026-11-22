@@ -11,12 +11,17 @@
 
     <!-- Settings & Automation -->
     <string name="settings_automation_title">Automatización</string>
-    <string name="settings_scheduled_sync_title">Sincronización programada diaria</string>
-    <string name="settings_scheduled_sync_desc">Sincroniza automáticamente partidas pendientes una vez al día en segundo plano.</string>
+    <string name="settings_scheduled_sync_title">Sincronización automática</string>
+    <string name="settings_scheduled_sync_desc">Sincroniza automáticamente tus partidas con Google Drive en segundo plano.</string>
+    <string name="settings_sync_mode_label">Modo de funcionamiento</string>
+    <string name="settings_sync_mode_auto">Automático</string>
+    <string name="settings_sync_mode_scheduled">Por hora</string>
+    <string name="settings_sync_mode_auto_desc">Detecta cambios al guardar partida para subirla automáticamente y descarga partidas nuevas de Drive al cambiar de dispositivo.</string>
+    <string name="settings_sync_mode_scheduled_desc">Sincroniza todas tus partidas pendientes una vez al día a la hora elegida.</string>
     <string name="settings_scheduled_time_title">Hora de sincronización</string>
     <string name="settings_scheduled_time_dialog_title">Seleccionar hora de sincronización</string>
     <string name="settings_scheduled_sync_notify">Notificar resultado de sincronización</string>
-    <string name="settings_scheduled_sync_notify_desc">Recibe una notificación cuando termine la sincronización programada.</string>
+    <string name="settings_scheduled_sync_notify_desc">Recibe una notificación cuando la sincronización automática aplique cambios o detecte incidencias.</string>
     <string name="settings_about_title">Acerca de</string>
     <string name="settings_version">Versión %1$s</string>
 
