@@ -8,6 +8,7 @@ import android.webkit.MimeTypeMap
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import com.jotasoft.edensavesync.domain.model.LocalSaveGame
+import com.jotasoft.edensavesync.domain.model.LocalSaveSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -32,6 +33,7 @@ class EdenStorageManager @Inject constructor(
             "dev.eden.eden_emulator.ea",
             "org.yuzu.yuzu_emu"
         )
+        const val PEANUTS_PACKAGE = "dev.nxnative.android.peanuts"
         private val HEX_16_REGEX = Regex("^[0-9A-Fa-f]{16}$")
         private val HEX_32_REGEX = Regex("^[0-9A-Fa-f]{32}$")
         private const val ZERO_USER_DIR = "0000000000000000"
@@ -51,8 +53,18 @@ class EdenStorageManager @Inject constructor(
             val encodedPath = Uri.encode("Android/data/$pkg/files/nand/user/save")
             "content://com.android.externalstorage.documents/tree/primary%3A$encodedPath/document/primary%3A$encodedPath".toUri()
         }
+        return createOpenTreeIntent(initialUri)
+    }
 
-        return Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+    fun createOpenPeanutsFolderIntent(): Intent {
+        val encodedPath = Uri.encode("Android/data/$PEANUTS_PACKAGE/files/saves")
+        val initialUri =
+            "content://com.android.externalstorage.documents/tree/primary%3A$encodedPath/document/primary%3A$encodedPath".toUri()
+        return createOpenTreeIntent(initialUri)
+    }
+
+    private fun createOpenTreeIntent(initialUri: Uri): Intent =
+        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
             addFlags(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or
                     Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
@@ -61,6 +73,25 @@ class EdenStorageManager @Inject constructor(
             )
             putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
         }
+
+    private fun resolveTitleContainers(rootDoc: DocumentFile, source: LocalSaveSource): List<DocumentFile> =
+        when (source) {
+            LocalSaveSource.EDEN -> resolveProfileContainers(rootDoc)
+            LocalSaveSource.PEANUTS_NATIVE -> listOf(resolvePeanutsSavesDir(rootDoc))
+        }
+
+    private fun resolvePeanutsSavesDir(rootDoc: DocumentFile): DocumentFile {
+        if (rootDoc.name.equals("saves", ignoreCase = true)) {
+            return rootDoc
+        }
+        var current = rootDoc
+        for (step in listOf("files", "saves")) {
+            val child = current.findFileIgnoreCase(step)
+            if (child != null && child.isDirectory) {
+                current = child
+            }
+        }
+        return current
     }
 
     private fun resolveProfileContainers(rootDoc: DocumentFile): List<DocumentFile> {
@@ -112,21 +143,28 @@ class EdenStorageManager @Inject constructor(
                 !it.name.equals(ZERO_USER_DIR.repeat(2), ignoreCase = true)
         }
 
-    private fun findTitleDirectory(profileDir: DocumentFile, titleId: String): DocumentFile? =
-        profileDir.findFileIgnoreCase(titleId)
-            ?: profileDir.listFiles().firstOrNull {
+    private fun findTitleDirectory(containerDir: DocumentFile, titleId: String): DocumentFile? =
+        containerDir.findFileIgnoreCase(titleId)
+            ?: containerDir.listFiles().firstOrNull {
                 it.isDirectory && it.name.orEmpty().startsWith("$titleId (", ignoreCase = true)
             }
 
-    fun scanLocalSaves(treeUri: Uri): Pair<String, List<LocalSaveGame>> {
+    fun scanLocalSaves(
+        treeUri: Uri,
+        source: LocalSaveSource = LocalSaveSource.EDEN
+    ): Pair<String, List<LocalSaveGame>> {
         val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return "" to emptyList()
-        val profileDirs = resolveProfileContainers(rootDoc)
+        val containers = resolveTitleContainers(rootDoc, source)
         val savesByTitle = mutableMapOf<String, LocalSaveGame>()
-        var primaryProfileId = profileDirs.firstOrNull()?.name.orEmpty()
+        var primaryProfileId = if (source == LocalSaveSource.EDEN) {
+            containers.firstOrNull()?.name.orEmpty()
+        } else {
+            ""
+        }
 
-        for (profileDir in profileDirs) {
-            val profileId = profileDir.name.orEmpty()
-            for (titleDir in profileDir.listFiles()) {
+        for (container in containers) {
+            val profileId = if (source == LocalSaveSource.EDEN) container.name.orEmpty() else ""
+            for (titleDir in container.listFiles()) {
                 val titleName = titleDir.name.orEmpty().substringBefore(" (").trim().uppercase()
                 if (!titleDir.isDirectory || !HEX_16_REGEX.matches(titleName)) continue
 
@@ -139,13 +177,16 @@ class EdenStorageManager @Inject constructor(
                     lastModifiedMs = stats.lastModifiedMs,
                     totalSizeBytes = stats.totalSizeBytes,
                     fileCount = stats.fileCount,
-                    contentHash = stats.contentHash
+                    contentHash = stats.contentHash,
+                    source = source
                 )
 
                 val existing = savesByTitle[titleName]
                 if (existing == null || candidate.lastModifiedMs > existing.lastModifiedMs) {
                     savesByTitle[titleName] = candidate
-                    primaryProfileId = profileId
+                    if (source == LocalSaveSource.EDEN) {
+                        primaryProfileId = profileId
+                    }
                 }
             }
         }
@@ -153,23 +194,28 @@ class EdenStorageManager @Inject constructor(
         return primaryProfileId to savesByTitle.values.sortedByDescending { it.lastModifiedMs }
     }
 
-    fun scanSingleTitleSave(treeUri: Uri, titleId: String): LocalSaveGame? {
+    fun scanSingleTitleSave(
+        treeUri: Uri,
+        titleId: String,
+        source: LocalSaveSource = LocalSaveSource.EDEN
+    ): LocalSaveGame? {
         val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return null
         val normalizedTitleId = titleId.uppercase()
         var latest: LocalSaveGame? = null
 
-        for (profileDir in resolveProfileContainers(rootDoc)) {
-            val titleDir = findTitleDirectory(profileDir, normalizedTitleId) ?: continue
+        for (container in resolveTitleContainers(rootDoc, source)) {
+            val titleDir = findTitleDirectory(container, normalizedTitleId) ?: continue
             val stats = computeDirectoryStats(titleDir)
             if (stats.fileCount == 0) continue
 
             val candidate = LocalSaveGame(
                 titleId = normalizedTitleId,
-                userProfileId = profileDir.name.orEmpty(),
+                userProfileId = if (source == LocalSaveSource.EDEN) container.name.orEmpty() else "",
                 lastModifiedMs = stats.lastModifiedMs,
                 totalSizeBytes = stats.totalSizeBytes,
                 fileCount = stats.fileCount,
-                contentHash = stats.contentHash
+                contentHash = stats.contentHash,
+                source = source
             )
             if (latest == null || candidate.lastModifiedMs > latest.lastModifiedMs) {
                 latest = candidate
@@ -178,9 +224,14 @@ class EdenStorageManager @Inject constructor(
         return latest
     }
 
-    fun exportTitleSaveToZip(treeUri: Uri, titleId: String, targetZipFile: File): Boolean {
+    fun exportTitleSaveToZip(
+        treeUri: Uri,
+        titleId: String,
+        targetZipFile: File,
+        source: LocalSaveSource = LocalSaveSource.EDEN
+    ): Boolean {
         val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return false
-        val candidates = resolveProfileContainers(rootDoc).mapNotNull { findTitleDirectory(it, titleId) }
+        val candidates = resolveTitleContainers(rootDoc, source).mapNotNull { findTitleDirectory(it, titleId) }
         val titleDir = when {
             candidates.isEmpty() -> return false
             candidates.size == 1 -> candidates.first()
@@ -201,24 +252,32 @@ class EdenStorageManager @Inject constructor(
         return true
     }
 
-    fun importTitleSaveFromZip(treeUri: Uri, titleId: String, sourceZipFile: File): Boolean {
+    fun importTitleSaveFromZip(
+        treeUri: Uri,
+        titleId: String,
+        sourceZipFile: File,
+        source: LocalSaveSource = LocalSaveSource.EDEN
+    ): Boolean {
         if (!sourceZipFile.exists() || sourceZipFile.length() <= 22L) return false
 
         val normalizedTitleId = titleId.uppercase()
         val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return false
 
-        createLocalBackupIfPresent(treeUri, normalizedTitleId)
+        createLocalBackupIfPresent(treeUri, normalizedTitleId, source)
 
-        val targetProfileDir = resolveOrCreateActiveProfileDir(rootDoc) ?: return false
+        val targetContainerDir = when (source) {
+            LocalSaveSource.EDEN -> resolveOrCreateActiveProfileDir(rootDoc)
+            LocalSaveSource.PEANUTS_NATIVE -> resolvePeanutsSavesDir(rootDoc)
+        } ?: return false
 
-        targetProfileDir.listFiles().forEach { child ->
+        targetContainerDir.listFiles().forEach { child ->
             if (child.isDirectory && child.name.orEmpty().startsWith("$normalizedTitleId (", ignoreCase = true)) {
                 deleteRecursively(child)
             }
         }
 
-        val targetTitleDir = targetProfileDir.findFileIgnoreCase(normalizedTitleId)
-            ?: targetProfileDir.createDirectory(normalizedTitleId)
+        val targetTitleDir = targetContainerDir.findFileIgnoreCase(normalizedTitleId)
+            ?: targetContainerDir.createDirectory(normalizedTitleId)
             ?: return false
 
         targetTitleDir.listFiles().forEach(::deleteRecursively)
@@ -300,12 +359,12 @@ class EdenStorageManager @Inject constructor(
     private fun backupDirFor(titleId: String): File =
         File(context.filesDir, "backups/${titleId.uppercase()}")
 
-    private fun createLocalBackupIfPresent(treeUri: Uri, titleId: String) {
+    private fun createLocalBackupIfPresent(treeUri: Uri, titleId: String, source: LocalSaveSource) {
         runCatching {
             val backupDir = backupDirFor(titleId).apply { mkdirs() }
             val backupFile = File(backupDir, "backup_${System.currentTimeMillis()}.zip")
-            val exported = exportTitleSaveToZip(treeUri, titleId, backupFile)
-            if ((!exported || backupFile.length() <= 100L) && backupFile.exists()) {
+            val exported = exportTitleSaveToZip(treeUri, titleId, backupFile, source)
+            if ((!exported || backupFile.length() <= 22L) && backupFile.exists()) {
                 backupFile.delete()
             }
             backupDir.listFiles { f -> f.extension == "zip" }
@@ -318,13 +377,23 @@ class EdenStorageManager @Inject constructor(
     fun getLocalBackupCount(titleId: String): Int =
         backupDirFor(titleId).listFiles { f -> f.extension == "zip" }?.size ?: 0
 
-    fun restoreLatestLocalBackup(treeUri: Uri, titleId: String): Boolean {
-        val latestBackup = backupDirFor(titleId)
+    fun saveBackupFromZip(titleId: String, sourceBackupZip: File) {
+        runCatching {
+            if (!sourceBackupZip.exists() || sourceBackupZip.length() <= 22L) return
+            val backupDir = backupDirFor(titleId).apply { mkdirs() }
+            val backupFile = File(backupDir, "backup_${System.currentTimeMillis()}.zip")
+            sourceBackupZip.copyTo(backupFile, overwrite = true)
+            backupDir.listFiles { f -> f.extension == "zip" }
+                ?.sortedByDescending { it.lastModified() }
+                ?.drop(5)
+                ?.forEach { it.delete() }
+        }
+    }
+
+    fun getLatestLocalBackupFile(titleId: String): File? =
+        backupDirFor(titleId)
             .listFiles { f -> f.extension == "zip" }
             ?.maxByOrNull { it.lastModified() }
-            ?: return false
-        return importTitleSaveFromZip(treeUri, titleId, latestBackup)
-    }
 
     private fun resolveOrCreateActiveProfileDir(rootDoc: DocumentFile): DocumentFile? {
         val profiles = resolveProfileContainers(rootDoc)

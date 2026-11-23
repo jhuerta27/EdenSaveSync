@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jotasoft.edensavesync.R
 import com.jotasoft.edensavesync.domain.model.GameSyncItem
+import com.jotasoft.edensavesync.domain.model.LocalSaveSource
 import com.jotasoft.edensavesync.domain.repository.AuthRepository
 import com.jotasoft.edensavesync.domain.repository.EdenStorageRepository
 import com.jotasoft.edensavesync.domain.repository.SaveSyncRepository
@@ -37,7 +38,8 @@ class EdenSyncViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         EdenSyncUiState(
             deviceName = authRepository.getDeviceName(),
-            edenFolderUri = storageRepository.getFolderUriString()?.let(Uri::parse),
+            edenFolderUri = storageRepository.getFolderUriString(LocalSaveSource.EDEN)?.let(Uri::parse),
+            peanutsFolderUri = storageRepository.getFolderUriString(LocalSaveSource.PEANUTS_NATIVE)?.let(Uri::parse),
             isGoogleDriveConnected = authRepository.isGoogleDriveConfigured()
         )
     )
@@ -47,12 +49,35 @@ class EdenSyncViewModel @Inject constructor(
         refreshAll()
     }
 
-    fun onEdenFolderSelected(uri: Uri) {
-        storageRepository.setFolderUriString(uri.toString())
-        _uiState.update {
-            it.copy(
-                edenFolderUri = uri,
-                statusBannerMessage = StringResource(R.string.msg_folder_linked),
+    fun onFolderSelected(source: LocalSaveSource, uri: Uri) {
+        storageRepository.setFolderUriString(uri.toString(), source)
+        val bannerRes = when (source) {
+            LocalSaveSource.EDEN -> R.string.msg_folder_linked
+            LocalSaveSource.PEANUTS_NATIVE -> R.string.msg_peanuts_folder_linked
+        }
+        _uiState.update { state ->
+            state.copy(
+                edenFolderUri = if (source == LocalSaveSource.EDEN) uri else state.edenFolderUri,
+                peanutsFolderUri = if (source == LocalSaveSource.PEANUTS_NATIVE) uri else state.peanutsFolderUri,
+                statusBannerMessage = StringResource(bannerRes),
+                isStatusError = false
+            )
+        }
+        refreshAll()
+    }
+
+    fun onUnlinkFolder(source: LocalSaveSource) {
+        storageRepository.setFolderUriString(null, source)
+        val bannerRes = when (source) {
+            LocalSaveSource.EDEN -> R.string.msg_folder_unlinked
+            LocalSaveSource.PEANUTS_NATIVE -> R.string.msg_peanuts_folder_unlinked
+        }
+        _uiState.update { state ->
+            state.copy(
+                edenFolderUri = if (source == LocalSaveSource.EDEN) null else state.edenFolderUri,
+                peanutsFolderUri = if (source == LocalSaveSource.PEANUTS_NATIVE) null else state.peanutsFolderUri,
+                activeProfileId = if (source == LocalSaveSource.EDEN) "" else state.activeProfileId,
+                statusBannerMessage = StringResource(bannerRes),
                 isStatusError = false
             )
         }
@@ -114,6 +139,13 @@ class EdenSyncViewModel @Inject constructor(
 
     fun dismissBanner() = _uiState.update { it.copy(statusBannerMessage = null) }
 
+    fun showStatusError(@androidx.annotation.StringRes messageRes: Int) = _uiState.update {
+        it.copy(
+            statusBannerMessage = StringResource(messageRes),
+            isStatusError = true
+        )
+    }
+
     fun onAppResumed() {
         val nowConnected = authRepository.isGoogleDriveConfigured()
         if (nowConnected != _uiState.value.isGoogleDriveConnected) {
@@ -127,11 +159,14 @@ class EdenSyncViewModel @Inject constructor(
             _uiState.update { it.copy(isScanning = true) }
             try {
                 val (profileId, list) = scanGamesUseCase()
+                val scanWarning = storageRepository.consumeLastScanWarning()
                 _uiState.update { state ->
                     state.copy(
                         isScanning = false,
                         activeProfileId = profileId,
-                        games = list
+                        games = list,
+                        statusBannerMessage = scanWarning?.let(StringResource::invoke) ?: state.statusBannerMessage,
+                        isStatusError = if (scanWarning != null) true else state.isStatusError
                     )
                 }
             } catch (e: Exception) {

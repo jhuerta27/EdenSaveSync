@@ -9,6 +9,36 @@ import com.jotasoft.edensavesync.domain.model.SyncedRecord
 
 internal object SaveReconciler {
 
+    fun selectLatestLocalSave(
+        candidates: List<LocalSaveGame>,
+        configuredSourceCount: Int,
+        syncedRecord: SyncedRecord?
+    ): LocalSaveGame? {
+        if (candidates.isEmpty()) return null
+        val distinctSourcesCount = candidates.map { it.source }.distinct().size
+        val distinctHashes = candidates.map { it.contentHash }.distinct()
+        val allSameHash = distinctHashes.size == 1 && distinctHashes.first().isNotBlank()
+        val isMirrored = distinctSourcesCount >= configuredSourceCount.coerceAtLeast(1) &&
+            (configuredSourceCount <= 1 || allSameHash)
+
+        val winner = when {
+            candidates.size == 1 -> candidates.first()
+            allSameHash -> candidates.maxByOrNull { it.lastModifiedMs } ?: candidates.first()
+            syncedRecord != null && syncedRecord.contentHash.isNotBlank() -> {
+                val changed = candidates.filter { it.contentHash != syncedRecord.contentHash }
+                val unchanged = candidates.filter { it.contentHash == syncedRecord.contentHash }
+                if (changed.isNotEmpty() && unchanged.isNotEmpty()) {
+                    changed.maxByOrNull { it.lastModifiedMs } ?: changed.first()
+                } else {
+                    candidates.maxByOrNull { it.lastModifiedMs } ?: candidates.first()
+                }
+            }
+            else -> candidates.maxByOrNull { it.lastModifiedMs } ?: candidates.first()
+        }
+
+        return winner.copy(isMirroredAcrossAllConfiguredSources = isMirrored)
+    }
+
     fun mergeLocalAndRemote(
         locals: List<LocalSaveGame>,
         remotes: List<RemoteSaveGame>,
@@ -59,42 +89,53 @@ internal object SaveReconciler {
         local: LocalSaveGame?,
         remote: RemoteSaveGame?,
         syncedRecord: SyncedRecord?
-    ): SyncRecommendation = when {
-        local != null && remote == null -> SyncRecommendation.UPLOAD_TO_CLOUD
-        local == null && remote != null -> SyncRecommendation.DOWNLOAD_FROM_CLOUD
-        local != null && remote != null -> {
-            if (local.contentHash.isNotBlank() && local.contentHash == remote.contentHash) {
-                SyncRecommendation.IN_SYNC
-            } else if (
-                syncedRecord != null &&
-                syncedRecord.contentHash.isNotBlank() &&
-                syncedRecord.contentHash == local.contentHash
-            ) {
-                // El archivo local no ha cambiado desde la última sincronización
-                if (remote.lastModifiedMs > syncedRecord.remoteTimestampMs + 2_000L) {
-                    SyncRecommendation.DOWNLOAD_FROM_CLOUD
-                } else {
+    ): SyncRecommendation {
+        val base = when {
+            local != null && remote == null -> SyncRecommendation.UPLOAD_TO_CLOUD
+            local == null && remote != null -> SyncRecommendation.DOWNLOAD_FROM_CLOUD
+            local != null && remote != null -> {
+                if (local.contentHash.isNotBlank() && local.contentHash == remote.contentHash) {
                     SyncRecommendation.IN_SYNC
-                }
-            } else {
-                val effectiveLocalMs = if (local.lastModifiedMs > 0L) {
-                    local.lastModifiedMs
-                } else {
-                    syncedRecord?.localTimestampAtSyncMs ?: 0L
-                }
-
-                when {
-                    effectiveLocalMs > remote.lastModifiedMs + 2_000L ->
-                        SyncRecommendation.UPLOAD_TO_CLOUD
-                    remote.lastModifiedMs > effectiveLocalMs + 2_000L &&
-                            (syncedRecord == null || remote.lastModifiedMs > syncedRecord.remoteTimestampMs + 2_000L) ->
+                } else if (
+                    syncedRecord != null &&
+                    syncedRecord.contentHash.isNotBlank() &&
+                    syncedRecord.contentHash == local.contentHash
+                ) {
+                    // El archivo local no ha cambiado desde la última sincronización
+                    if (remote.lastModifiedMs > syncedRecord.remoteTimestampMs + 2_000L) {
                         SyncRecommendation.DOWNLOAD_FROM_CLOUD
-                    syncedRecord != null && remote.lastModifiedMs <= syncedRecord.remoteTimestampMs + 2_000L ->
-                        SyncRecommendation.UPLOAD_TO_CLOUD
-                    else -> SyncRecommendation.IN_SYNC
+                    } else {
+                        SyncRecommendation.IN_SYNC
+                    }
+                } else {
+                    val effectiveLocalMs = if (local.lastModifiedMs > 0L) {
+                        local.lastModifiedMs
+                    } else {
+                        syncedRecord?.localTimestampAtSyncMs ?: 0L
+                    }
+
+                    when {
+                        effectiveLocalMs > remote.lastModifiedMs + 2_000L ->
+                            SyncRecommendation.UPLOAD_TO_CLOUD
+                        remote.lastModifiedMs > effectiveLocalMs + 2_000L &&
+                            (syncedRecord == null || remote.lastModifiedMs > syncedRecord.remoteTimestampMs + 2_000L) ->
+                            SyncRecommendation.DOWNLOAD_FROM_CLOUD
+                        syncedRecord != null && remote.lastModifiedMs <= syncedRecord.remoteTimestampMs + 2_000L ->
+                            SyncRecommendation.UPLOAD_TO_CLOUD
+                        else -> SyncRecommendation.IN_SYNC
+                    }
                 }
             }
+            else -> SyncRecommendation.IN_SYNC
         }
-        else -> SyncRecommendation.IN_SYNC
+
+        if (base == SyncRecommendation.IN_SYNC &&
+            local != null &&
+            remote != null &&
+            !local.isMirroredAcrossAllConfiguredSources
+        ) {
+            return SyncRecommendation.DOWNLOAD_FROM_CLOUD
+        }
+        return base
     }
 }

@@ -34,6 +34,12 @@ class AppPreferences @Inject constructor(
             prefs.edit { putString("eden_tree_uri", value?.toString()) }
         }
 
+    var peanutsTreeUri: Uri?
+        get() = prefs.getString("peanuts_tree_uri", null)?.toUri()
+        set(value) {
+            prefs.edit { putString("peanuts_tree_uri", value?.toString()) }
+        }
+
     var deviceName: String
         get() = prefs.getString("device_name", null)
             ?.takeIf { it.isNotBlank() }

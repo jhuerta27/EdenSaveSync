@@ -44,7 +44,11 @@
     <string name="field_device_name">Device name</string>
 
     <!-- Setup Status Card -->
-    <string name="setup_eden_folder_title">Eden Folder</string>
+    <string name="setup_column_local">LOCAL</string>
+    <string name="setup_column_remote">REMOTE</string>
+    <string name="setup_eden_folder_title">Eden</string>
+    <string name="setup_peanuts_folder_title">Peanuts Native</string>
+    <string name="setup_peanuts_folder_linked_shizuku">Linked (Shizuku)</string>
     <string name="setup_eden_folder_linked">Linked</string>
     <string name="setup_eden_folder_unlinked">Tap to link</string>
     <string name="setup_drive_title">Google Drive</string>
@@ -54,11 +58,11 @@
 
     <!-- Hero Card -->
     <string name="hero_title_syncing">Syncing saves...</string>
-    <string name="hero_title_not_ready">Configure Eden and Google Drive to get started</string>
+    <string name="hero_title_not_ready">Configure a local folder and Google Drive to get started</string>
     <string name="hero_title_changes_ready">Changes ready to sync</string>
     <string name="hero_title_up_to_date">All saves up to date</string>
     <string name="hero_title_ready_scan">Ready to scan your saves</string>
-    <string name="hero_subtitle_not_ready">Link your nand/user/save folder and your Google Drive account.</string>
+    <string name="hero_subtitle_not_ready">Link at least one local folder (Eden or Peanuts Native) and your Google Drive account.</string>
     <string name="hero_subtitle_changes">%1$d to upload to cloud • %2$d to download to this device</string>
     <string name="hero_subtitle_up_to_date">Your devices have the latest save for every game.</string>
     <string name="hero_button_sync_changes">Sync now (%1$d ⬆️ / %2$d ⬇️)</string>
@@ -68,10 +72,11 @@
     <string name="section_detected_saves">Detected saves (%1$d)</string>
     <string name="status_scanning">Scanning...</string>
     <string name="empty_saves_title_has_folder">No saved games found yet</string>
-    <string name="empty_saves_title_no_folder">Link Eden data folder</string>
-    <string name="empty_saves_desc_has_folder">Make sure you selected the Eden folder (nand/user/save) or connect Google Drive to download your saves from another device.</string>
-    <string name="empty_saves_desc_no_folder">Select your Eden saves folder to start syncing across your Android devices.</string>
-    <string name="empty_saves_button">Select Eden folder</string>
+    <string name="empty_saves_title_no_folder">Link at least one saves folder</string>
+    <string name="empty_saves_desc_has_folder">Make sure you selected the right Eden or Peanuts Native folder, or connect Google Drive to download your saves from another device.</string>
+    <string name="empty_saves_desc_no_folder">Select your Eden folder, Peanuts Native folder, or both to start syncing across your Android devices.</string>
+    <string name="empty_saves_button">Link Eden</string>
+    <string name="empty_saves_button_peanuts">Link Peanuts Native</string>
 
     <!-- Game Item Card -->
     <string name="badge_upload_recommended">⬆️ Local newer</string>
@@ -85,11 +90,14 @@
     <string name="game_card_no_remote">Not uploaded yet</string>
     <string name="game_card_remote_source">From: %1$s</string>
     <string name="game_card_stats">%1$s • %2$d files</string>
+    <string name="game_card_stats_with_source">%1$s • %2$s • %3$d files</string>
+    <string name="source_label_eden">Eden</string>
+    <string name="source_label_peanuts">Peanuts Native</string>
     <string name="game_card_action_upload">Upload</string>
     <string name="game_card_action_download">Download</string>
     <string name="game_card_action_restore_backup">Restore backup (%1$d)</string>
 
-    <!-- Eden Folder Setup Dialog -->
+    <!-- Local Folder Setup Dialogs -->
     <string name="dialog_folder_title">Link Eden Folder (Android/data)</string>
     <string name="dialog_folder_intro">Eden saves your Nintendo Switch games in:\nAndroid/data/dev.eden.eden_emulator/files/nand/user/save</string>
     <string name="dialog_folder_option_a_title">Option A — Native Eden Provider (Recommended on Android 14/15/16):</string>
@@ -98,6 +106,16 @@
     <string name="dialog_folder_option_b_title">Option B — Direct Android/data path (Handhelds or custom folder):</string>
     <string name="dialog_folder_option_b_desc">Directly open Android/data/dev.eden.eden_emulator/files/nand/user/save or your Eden user folder.</string>
     <string name="dialog_folder_option_b_button">Open Android/data or custom folder</string>
+
+    <string name="dialog_peanuts_folder_title">Link Peanuts Native (Requires Shizuku)</string>
+    <string name="dialog_peanuts_folder_intro">Peanuts Native stores saves in:\nAndroid/data/dev.nxnative.android.peanuts/files/saves\n\n⚠️ Shizuku is required to access this folder on Android 11+ devices (such as Samsung Galaxy), because Android restricts Android/data and Peanuts Native does not expose a Documents Provider.</string>
+    <string name="dialog_peanuts_folder_option_a_title">Option A — Shizuku Access (Required on Android 14/15/16 phones):</string>
+    <string name="dialog_peanuts_folder_option_a_steps">1. Open the Shizuku app and start it using Wireless Debugging.\n2. Tap the button below and grant Shizuku permission.\n3. The app will automatically access the Peanuts Native saves folder.</string>
+    <string name="dialog_peanuts_folder_option_a_button">Connect with Shizuku</string>
+    <string name="dialog_peanuts_folder_option_b_title">Option B — Direct SAF picker (Handhelds or custom folder):</string>
+    <string name="dialog_peanuts_folder_option_b_desc">Only if your device allows direct access to Android/data or you use a custom folder.</string>
+    <string name="dialog_peanuts_folder_option_b_button">Open saves or custom folder</string>
+    <string name="dialog_folder_unlink_button">Unlink this folder</string>
 
     <!-- Drive Config Dialog -->
     <string name="dialog_drive_title">Connect Google Drive</string>
@@ -118,11 +136,20 @@
 
     <!-- ViewModel Status & Toast Messages -->
     <string name="msg_folder_linked">Eden folder linked successfully.</string>
+    <string name="msg_peanuts_folder_linked">Peanuts Native folder linked successfully.</string>
+    <string name="msg_folder_unlinked">Eden folder unlinked.</string>
+    <string name="msg_peanuts_folder_unlinked">Peanuts Native folder unlinked.</string>
+    <string name="msg_shizuku_not_installed">Shizuku is required to sync Peanuts Native on this device. Please install and start Shizuku first.</string>
+    <string name="msg_shizuku_not_running">Shizuku is not running. Open the Shizuku app, start it (Wireless Debugging), and try again.</string>
+    <string name="msg_shizuku_permission_denied">Shizuku permission was denied. Authorization is required to access Peanuts Native saves.</string>
+    <string name="msg_shizuku_permission_required">Shizuku permission is required to access Peanuts Native.</string>
+    <string name="msg_shizuku_bind_failed">Could not connect to the Shizuku service.</string>
+    <string name="msg_shizuku_external_cache_unavailable">External cache directory is unavailable for Shizuku file transfer.</string>
     <string name="msg_waiting_browser_auth">Waiting for Google authorization in browser...</string>
     <string name="msg_drive_connected">Google Drive account connected successfully!</string>
     <string name="msg_drive_auth_error">Error authorizing Google Drive</string>
     <string name="msg_drive_disconnected">Google Drive account disconnected.</string>
-    <string name="msg_link_folder_first">Please link the Eden saves folder first.</string>
+    <string name="msg_link_folder_first">Please link at least one local folder (Eden or Peanuts Native) first.</string>
     <string name="msg_connect_drive_first">Please connect your Google Drive account first.</string>
     <string name="msg_sync_starting">Starting sync...</string>
     <string name="msg_all_in_sync">All up to date! Your saves are already synchronized between both devices.</string>

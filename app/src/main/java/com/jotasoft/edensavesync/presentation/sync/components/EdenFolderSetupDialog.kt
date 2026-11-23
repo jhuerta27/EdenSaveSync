@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -23,22 +22,61 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jotasoft.edensavesync.R
+import com.jotasoft.edensavesync.domain.model.LocalSaveSource
 import com.jotasoft.edensavesync.ui.theme.AccentCyan
 import com.jotasoft.edensavesync.ui.theme.AccentPurple
+import com.jotasoft.edensavesync.ui.theme.DangerRed
 import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
 
 @Composable
 fun EdenFolderSetupDialog(
+    source: LocalSaveSource,
+    isLinked: Boolean,
     onDismiss: () -> Unit,
     onPickDirectAndroidData: () -> Unit,
-    onPickEdenDocumentsProvider: () -> Unit
+    onPickDocumentsProvider: () -> Unit,
+    onUnlink: () -> Unit
 ) {
+    val isPeanuts = source == LocalSaveSource.PEANUTS_NATIVE
+    val titleRes = if (isPeanuts) R.string.dialog_peanuts_folder_title else R.string.dialog_folder_title
+    val introRes = if (isPeanuts) R.string.dialog_peanuts_folder_intro else R.string.dialog_folder_intro
+    val optionATitleRes = if (isPeanuts) {
+        R.string.dialog_peanuts_folder_option_a_title
+    } else {
+        R.string.dialog_folder_option_a_title
+    }
+    val optionAStepsRes = if (isPeanuts) {
+        R.string.dialog_peanuts_folder_option_a_steps
+    } else {
+        R.string.dialog_folder_option_a_steps
+    }
+    val optionAButtonRes = if (isPeanuts) {
+        R.string.dialog_peanuts_folder_option_a_button
+    } else {
+        R.string.dialog_folder_option_a_button
+    }
+    val optionBTitleRes = if (isPeanuts) {
+        R.string.dialog_peanuts_folder_option_b_title
+    } else {
+        R.string.dialog_folder_option_b_title
+    }
+    val optionBDescRes = if (isPeanuts) {
+        R.string.dialog_peanuts_folder_option_b_desc
+    } else {
+        R.string.dialog_folder_option_b_desc
+    }
+    val optionBButtonRes = if (isPeanuts) {
+        R.string.dialog_peanuts_folder_option_b_button
+    } else {
+        R.string.dialog_folder_option_b_button
+    }
+
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         AlertDialog(
             onDismissRequest = onDismiss,
             title = {
                 Text(
-                    text = stringResource(R.string.dialog_folder_title),
+                    text = stringResource(titleRes),
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp
                 )
@@ -49,41 +87,41 @@ fun EdenFolderSetupDialog(
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = stringResource(R.string.dialog_folder_intro),
+                        text = stringResource(introRes),
                         fontSize = 13.sp
                     )
                     HorizontalDivider()
                     Text(
-                        text = stringResource(R.string.dialog_folder_option_a_title),
+                        text = stringResource(optionATitleRes),
                         fontWeight = FontWeight.SemiBold,
                         color = AccentCyan,
                         fontSize = 13.sp
                     )
                     Text(
-                        text = stringResource(R.string.dialog_folder_option_a_steps),
+                        text = stringResource(optionAStepsRes),
                         fontSize = 12.sp
                     )
                     Button(
-                        onClick = onPickEdenDocumentsProvider,
+                        onClick = onPickDocumentsProvider,
                         modifier = Modifier
                             .fillMaxWidth()
                             .gamepadFocusable(
                                 shape = CircleShape,
-                                onClick = onPickEdenDocumentsProvider
+                                onClick = onPickDocumentsProvider
                             )
                     ) {
-                        Text(stringResource(R.string.dialog_folder_option_a_button))
+                        Text(stringResource(optionAButtonRes))
                     }
 
                     HorizontalDivider()
                     Text(
-                        text = stringResource(R.string.dialog_folder_option_b_title),
+                        text = stringResource(optionBTitleRes),
                         fontWeight = FontWeight.SemiBold,
                         color = AccentPurple,
                         fontSize = 13.sp
                     )
                     Text(
-                        text = stringResource(R.string.dialog_folder_option_b_desc),
+                        text = stringResource(optionBDescRes),
                         fontSize = 12.sp
                     )
                     OutlinedButton(
@@ -95,7 +133,25 @@ fun EdenFolderSetupDialog(
                                 onClick = onPickDirectAndroidData
                             )
                     ) {
-                        Text(stringResource(R.string.dialog_folder_option_b_button))
+                        Text(stringResource(optionBButtonRes))
+                    }
+
+                    if (isLinked) {
+                        HorizontalDivider()
+                        OutlinedButton(
+                            onClick = onUnlink,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .gamepadFocusable(
+                                    shape = CircleShape,
+                                    onClick = onUnlink
+                                )
+                        ) {
+                            Text(
+                                text = stringResource(R.string.dialog_folder_unlink_button),
+                                color = DangerRed
+                            )
+                        }
                     }
                 }
             },

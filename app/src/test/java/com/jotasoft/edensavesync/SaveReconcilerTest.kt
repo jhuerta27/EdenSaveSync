@@ -2,10 +2,14 @@ package com.jotasoft.edensavesync
 
 import com.jotasoft.edensavesync.data.repository.SaveReconciler
 import com.jotasoft.edensavesync.domain.model.LocalSaveGame
+import com.jotasoft.edensavesync.domain.model.LocalSaveSource
 import com.jotasoft.edensavesync.domain.model.RemoteSaveGame
 import com.jotasoft.edensavesync.domain.model.SyncRecommendation
 import com.jotasoft.edensavesync.domain.model.SyncedRecord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SaveReconcilerTest {
@@ -196,5 +200,119 @@ class SaveReconcilerTest {
         assertEquals("0100000000000001", merged[1].titleId)
         assertEquals(SyncRecommendation.IN_SYNC, merged[2].recommendation)
         assertEquals("0100000000000002", merged[2].titleId)
+    }
+
+    @Test
+    fun selectLatestLocalSave_picksPeanutsWhenNewerThanEden() {
+        val eden = LocalSaveGame(
+            titleId = subnauticaTitleId,
+            userProfileId = "00000001000000000000000000000000",
+            lastModifiedMs = 1_700_000_000_000L,
+            totalSizeBytes = 10_000L,
+            fileCount = 3,
+            contentHash = "hash_eden_old",
+            source = LocalSaveSource.EDEN
+        )
+        val peanuts = LocalSaveGame(
+            titleId = subnauticaTitleId,
+            userProfileId = "",
+            lastModifiedMs = 1_700_010_000_000L,
+            totalSizeBytes = 12_000L,
+            fileCount = 4,
+            contentHash = "hash_peanuts_new",
+            source = LocalSaveSource.PEANUTS_NATIVE
+        )
+
+        val winner = SaveReconciler.selectLatestLocalSave(
+            candidates = listOf(eden, peanuts),
+            configuredSourceCount = 2,
+            syncedRecord = null
+        )
+
+        assertNotNull(winner)
+        assertEquals(LocalSaveSource.PEANUTS_NATIVE, winner!!.source)
+        assertEquals("hash_peanuts_new", winner.contentHash)
+        assertFalse(winner.isMirroredAcrossAllConfiguredSources)
+    }
+
+    @Test
+    fun selectLatestLocalSave_whenEdenHasZeroTimestampButChangedFromSyncRecord_picksEden() {
+        val eden = LocalSaveGame(
+            titleId = subnauticaTitleId,
+            userProfileId = "00000001000000000000000000000000",
+            lastModifiedMs = 0L,
+            totalSizeBytes = 12_000L,
+            fileCount = 4,
+            contentHash = "hash_eden_new_progress",
+            source = LocalSaveSource.EDEN
+        )
+        val peanuts = LocalSaveGame(
+            titleId = subnauticaTitleId,
+            userProfileId = "",
+            lastModifiedMs = 1_700_000_000_000L,
+            totalSizeBytes = 10_000L,
+            fileCount = 3,
+            contentHash = "hash_synced_v1",
+            source = LocalSaveSource.PEANUTS_NATIVE
+        )
+        val synced = SyncedRecord(
+            titleId = subnauticaTitleId,
+            contentHash = "hash_synced_v1",
+            remoteTimestampMs = 1_700_000_000_000L,
+            localTimestampAtSyncMs = 1_700_000_000_000L
+        )
+
+        val winner = SaveReconciler.selectLatestLocalSave(
+            candidates = listOf(eden, peanuts),
+            configuredSourceCount = 2,
+            syncedRecord = synced
+        )
+
+        assertNotNull(winner)
+        assertEquals(LocalSaveSource.EDEN, winner!!.source)
+        assertFalse(winner.isMirroredAcrossAllConfiguredSources)
+    }
+
+    @Test
+    fun selectLatestLocalSave_whenBothMatchHash_marksMirroredTrue() {
+        val eden = LocalSaveGame(subnauticaTitleId, "prof", 1_700_000_000_000L, 10_000L, 3, "same_hash", LocalSaveSource.EDEN)
+        val peanuts = LocalSaveGame(subnauticaTitleId, "", 1_700_000_000_000L, 10_000L, 3, "same_hash", LocalSaveSource.PEANUTS_NATIVE)
+
+        val winner = SaveReconciler.selectLatestLocalSave(
+            candidates = listOf(eden, peanuts),
+            configuredSourceCount = 2,
+            syncedRecord = null
+        )
+
+        assertNotNull(winner)
+        assertTrue(winner!!.isMirroredAcrossAllConfiguredSources)
+    }
+
+    @Test
+    fun evaluateRecommendation_whenMatchesRemoteButNotMirroredAcrossLocalSources_recommendsDownload() {
+        val local = LocalSaveGame(
+            titleId = subnauticaTitleId,
+            userProfileId = "prof",
+            lastModifiedMs = 1_700_000_000_000L,
+            totalSizeBytes = 10_000L,
+            fileCount = 3,
+            contentHash = "same_hash",
+            source = LocalSaveSource.EDEN,
+            isMirroredAcrossAllConfiguredSources = false
+        )
+        val remote = RemoteSaveGame(
+            titleId = subnauticaTitleId,
+            gameName = "Subnautica",
+            driveFileId = "drive_1",
+            lastModifiedMs = 1_700_000_000_000L,
+            totalSizeBytes = 10_000L,
+            fileCount = 3,
+            contentHash = "same_hash",
+            sourceDeviceName = "Odin 2",
+            uploadedAtMs = 1_700_000_000_000L
+        )
+
+        val result = SaveReconciler.evaluateRecommendation(local, remote, syncedRecord = null)
+        assertEquals(SyncRecommendation.DOWNLOAD_FROM_CLOUD, result)
     }
 }

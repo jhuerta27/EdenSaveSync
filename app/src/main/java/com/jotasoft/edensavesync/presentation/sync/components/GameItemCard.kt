@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jotasoft.edensavesync.R
 import com.jotasoft.edensavesync.domain.model.GameSyncItem
+import com.jotasoft.edensavesync.domain.model.LocalSaveSource
 import com.jotasoft.edensavesync.domain.model.SyncRecommendation
 import com.jotasoft.edensavesync.ui.theme.AccentCyan
 import com.jotasoft.edensavesync.ui.theme.AccentGreen
@@ -159,11 +160,18 @@ fun GameItemCard(
                     header = stringResource(R.string.game_card_local_header, currentDeviceName),
                     headerColor = AccentCyan,
                     primaryLine = item.localSave?.let { formatDateTime(it.lastModifiedMs) },
-                    secondaryLine = item.localSave?.let {
+                    secondaryLine = item.localSave?.let { local ->
+                        val sourceLabel = stringResource(
+                            when (local.source) {
+                                LocalSaveSource.EDEN -> R.string.source_label_eden
+                                LocalSaveSource.PEANUTS_NATIVE -> R.string.source_label_peanuts
+                            }
+                        )
                         stringResource(
-                            R.string.game_card_stats,
-                            formatBytes(it.totalSizeBytes),
-                            it.fileCount
+                            R.string.game_card_stats_with_source,
+                            sourceLabel,
+                            formatBytes(local.totalSizeBytes),
+                            local.fileCount
                         )
                     },
                     emptyLabel = stringResource(R.string.game_card_no_local),
