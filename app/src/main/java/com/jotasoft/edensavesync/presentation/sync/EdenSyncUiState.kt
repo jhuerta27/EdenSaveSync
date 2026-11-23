@@ -30,6 +30,7 @@ fun StringResource.asString(): String? = when {
 data class EdenSyncUiState(
     val deviceName: String = "",
     val edenFolderUri: Uri? = null,
+    val peanutsFolderUri: Uri? = null,
     val activeProfileId: String = "",
     val isGoogleDriveConnected: Boolean = false,
     val isScanning: Boolean = false,
@@ -38,4 +39,7 @@ data class EdenSyncUiState(
     val statusBannerMessage: StringResource? = null,
     val isStatusError: Boolean = false,
     val games: List<GameSyncItem> = emptyList()
-)
+) {
+    val hasAnyLocalFolder: Boolean
+        get() = edenFolderUri != null || peanutsFolderUri != null
+}

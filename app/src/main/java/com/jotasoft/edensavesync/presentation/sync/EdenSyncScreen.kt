@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jotasoft.edensavesync.R
 import com.jotasoft.edensavesync.domain.model.GameSyncItem
+import com.jotasoft.edensavesync.domain.model.LocalSaveSource
 import com.jotasoft.edensavesync.domain.model.SyncRecommendation
 import com.jotasoft.edensavesync.presentation.sync.components.DeviceNameDialog
 import com.jotasoft.edensavesync.presentation.sync.components.DriveConfigDialog
@@ -75,6 +76,8 @@ import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
 fun EdenSyncScreen(
     viewModel: EdenSyncViewModel,
     onOpenEdenFolderIntent: (useEdenProvider: Boolean) -> Intent,
+    onOpenPeanutsFolderIntent: (usePeanutsProvider: Boolean) -> Intent,
+    onConnectPeanutsWithShizuku: () -> Unit,
     onOpenBrowserAuthUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
     onOpenSettings: () -> Unit = {}
@@ -82,7 +85,7 @@ fun EdenSyncScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    val folderPickerLauncher = rememberLauncherForActivityResult(
+    val edenFolderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val treeUri = result.data?.data ?: return@rememberLauncherForActivityResult
@@ -92,13 +95,37 @@ fun EdenSyncScreen(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             )
         }
-        viewModel.onEdenFolderSelected(treeUri)
+        viewModel.onFolderSelected(LocalSaveSource.EDEN, treeUri)
+    }
+
+    val peanutsFolderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val treeUri = result.data?.data ?: return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                treeUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        }
+        viewModel.onFolderSelected(LocalSaveSource.PEANUTS_NATIVE, treeUri)
     }
 
     EdenSyncContent(
         uiState = uiState,
-        onPickEdenFolderStandard = { folderPickerLauncher.launch(onOpenEdenFolderIntent(false)) },
-        onPickEdenFolderProvider = { folderPickerLauncher.launch(onOpenEdenFolderIntent(true)) },
+        onPickFolderStandard = { source ->
+            when (source) {
+                LocalSaveSource.EDEN -> edenFolderPickerLauncher.launch(onOpenEdenFolderIntent(false))
+                LocalSaveSource.PEANUTS_NATIVE -> peanutsFolderPickerLauncher.launch(onOpenPeanutsFolderIntent(false))
+            }
+        },
+        onPickFolderProvider = { source ->
+            when (source) {
+                LocalSaveSource.EDEN -> edenFolderPickerLauncher.launch(onOpenEdenFolderIntent(true))
+                LocalSaveSource.PEANUTS_NATIVE -> onConnectPeanutsWithShizuku()
+            }
+        },
+        onUnlinkFolder = viewModel::onUnlinkFolder,
         onRefresh = viewModel::refreshAll,
         onOpenSettings = onOpenSettings,
         onSyncAll = viewModel::syncAllRecommended,
@@ -118,8 +145,9 @@ fun EdenSyncScreen(
 @Composable
 fun EdenSyncContent(
     uiState: EdenSyncUiState,
-    onPickEdenFolderStandard: () -> Unit,
-    onPickEdenFolderProvider: () -> Unit,
+    onPickFolderStandard: (LocalSaveSource) -> Unit,
+    onPickFolderProvider: (LocalSaveSource) -> Unit,
+    onUnlinkFolder: (LocalSaveSource) -> Unit,
     onRefresh: () -> Unit,
     onSyncAll: () -> Unit,
     onUploadSingle: (GameSyncItem) -> Unit,
@@ -133,7 +161,7 @@ fun EdenSyncContent(
     modifier: Modifier = Modifier,
     onOpenSettings: () -> Unit = {}
 ) {
-    var showFolderHelpDialog by remember { mutableStateOf(false) }
+    var activeFolderDialogSource by remember { mutableStateOf<LocalSaveSource?>(null) }
     var showDriveConfigDialog by remember { mutableStateOf(false) }
     var showDeviceNameDialog by remember { mutableStateOf(false) }
     var gameToRename by remember { mutableStateOf<GameSyncItem?>(null) }
@@ -280,16 +308,19 @@ fun EdenSyncContent(
             item {
                 SetupStatusCard(
                     edenConnected = uiState.edenFolderUri != null,
+                    peanutsConnected = uiState.peanutsFolderUri != null,
+                    peanutsViaShizuku = uiState.peanutsFolderUri?.scheme.equals("shizuku", ignoreCase = true),
                     activeProfileId = uiState.activeProfileId,
                     driveConnected = uiState.isGoogleDriveConnected,
-                    onConfigureEdenClick = { showFolderHelpDialog = true },
+                    onConfigureEdenClick = { activeFolderDialogSource = LocalSaveSource.EDEN },
+                    onConfigurePeanutsClick = { activeFolderDialogSource = LocalSaveSource.PEANUTS_NATIVE },
                     onConfigureDriveClick = { showDriveConfigDialog = true }
                 )
             }
 
             item {
                 OneTouchSyncHeroCard(
-                    isReady = uiState.edenFolderUri != null && uiState.isGoogleDriveConnected,
+                    isReady = uiState.hasAnyLocalFolder && uiState.isGoogleDriveConnected,
                     isSyncing = uiState.isSyncing || uiState.isScanning,
                     progressMessage = syncProgressText,
                     uploadCount = uploadPendingCount,
@@ -334,8 +365,9 @@ fun EdenSyncContent(
             if (uiState.games.isEmpty() && !uiState.isScanning) {
                 item {
                     EmptySavesPlaceholder(
-                        hasFolder = uiState.edenFolderUri != null,
-                        onOpenFolderSetup = { showFolderHelpDialog = true }
+                        hasFolder = uiState.hasAnyLocalFolder,
+                        onOpenEdenSetup = { activeFolderDialogSource = LocalSaveSource.EDEN },
+                        onOpenPeanutsSetup = { activeFolderDialogSource = LocalSaveSource.PEANUTS_NATIVE }
                     )
                 }
             } else {
@@ -355,16 +387,26 @@ fun EdenSyncContent(
         }
     }
 
-    if (showFolderHelpDialog) {
+    activeFolderDialogSource?.let { source ->
+        val isLinked = when (source) {
+            LocalSaveSource.EDEN -> uiState.edenFolderUri != null
+            LocalSaveSource.PEANUTS_NATIVE -> uiState.peanutsFolderUri != null
+        }
         EdenFolderSetupDialog(
-            onDismiss = { showFolderHelpDialog = false },
+            source = source,
+            isLinked = isLinked,
+            onDismiss = { activeFolderDialogSource = null },
             onPickDirectAndroidData = {
-                showFolderHelpDialog = false
-                onPickEdenFolderStandard()
+                activeFolderDialogSource = null
+                onPickFolderStandard(source)
             },
-            onPickEdenDocumentsProvider = {
-                showFolderHelpDialog = false
-                onPickEdenFolderProvider()
+            onPickDocumentsProvider = {
+                activeFolderDialogSource = null
+                onPickFolderProvider(source)
+            },
+            onUnlink = {
+                activeFolderDialogSource = null
+                onUnlinkFolder(source)
             }
         )
     }

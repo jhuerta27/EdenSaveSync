@@ -1,12 +1,15 @@
 package com.jotasoft.edensavesync.presentation.sync.components
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FolderOpen
@@ -14,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,7 +37,8 @@ import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
 @Composable
 fun EmptySavesPlaceholder(
     hasFolder: Boolean,
-    onOpenFolderSetup: () -> Unit,
+    onOpenEdenSetup: () -> Unit,
+    onOpenPeanutsSetup: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -77,11 +82,22 @@ fun EmptySavesPlaceholder(
                 fontSize = 13.sp
             )
             Spacer(modifier = Modifier.height(14.dp))
-            Button(
-                onClick = onOpenFolderSetup,
-                modifier = Modifier.gamepadFocusable(shape = androidx.compose.foundation.shape.CircleShape)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(stringResource(R.string.empty_saves_button))
+                Button(
+                    onClick = onOpenEdenSetup,
+                    modifier = Modifier.gamepadFocusable(shape = CircleShape, onClick = onOpenEdenSetup)
+                ) {
+                    Text(stringResource(R.string.empty_saves_button))
+                }
+                OutlinedButton(
+                    onClick = onOpenPeanutsSetup,
+                    modifier = Modifier.gamepadFocusable(shape = CircleShape, onClick = onOpenPeanutsSetup)
+                ) {
+                    Text(stringResource(R.string.empty_saves_button_peanuts))
+                }
             }
         }
     }

@@ -28,11 +28,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jotasoft.edensavesync.R
 import com.jotasoft.edensavesync.ui.theme.AccentAmber
+import com.jotasoft.edensavesync.ui.theme.AccentCyan
 import com.jotasoft.edensavesync.ui.theme.AccentGreen
+import com.jotasoft.edensavesync.ui.theme.AccentPurple
 import com.jotasoft.edensavesync.ui.theme.CardBorder
 import com.jotasoft.edensavesync.ui.theme.CardDark
 import com.jotasoft.edensavesync.ui.theme.StatusConnectedBg
@@ -44,9 +47,12 @@ import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
 @Composable
 fun SetupStatusCard(
     edenConnected: Boolean,
+    peanutsConnected: Boolean,
+    peanutsViaShizuku: Boolean = false,
     activeProfileId: String,
     driveConnected: Boolean,
     onConfigureEdenClick: () -> Unit,
+    onConfigurePeanutsClick: () -> Unit,
     onConfigureDriveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -60,29 +66,70 @@ fun SetupStatusCard(
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                SetupStatusTile(
-                    isConnected = edenConnected,
-                    icon = Icons.Default.FolderOpen,
-                    title = stringResource(R.string.setup_eden_folder_title),
-                    subtitle = stringResource(
-                        if (edenConnected) R.string.setup_eden_folder_linked else R.string.setup_eden_folder_unlinked
-                    ),
-                    onClick = onConfigureEdenClick,
-                    modifier = Modifier.weight(1f)
-                )
+                // Columna izquierda: orígenes locales (preparada para futuras fuentes locales)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.setup_column_local),
+                        color = AccentCyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 2.dp)
+                    )
+                    SetupStatusTile(
+                        isConnected = edenConnected,
+                        icon = Icons.Default.FolderOpen,
+                        title = stringResource(R.string.setup_eden_folder_title),
+                        subtitle = stringResource(
+                            if (edenConnected) R.string.setup_eden_folder_linked else R.string.setup_eden_folder_unlinked
+                        ),
+                        onClick = onConfigureEdenClick,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    SetupStatusTile(
+                        isConnected = peanutsConnected,
+                        icon = Icons.Default.FolderOpen,
+                        title = stringResource(R.string.setup_peanuts_folder_title),
+                        subtitle = stringResource(
+                            when {
+                                peanutsConnected && peanutsViaShizuku -> R.string.setup_peanuts_folder_linked_shizuku
+                                peanutsConnected -> R.string.setup_eden_folder_linked
+                                else -> R.string.setup_eden_folder_unlinked
+                            }
+                        ),
+                        onClick = onConfigurePeanutsClick,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
-                SetupStatusTile(
-                    isConnected = driveConnected,
-                    icon = if (driveConnected) Icons.Default.CloudDone else Icons.Default.CloudOff,
-                    title = stringResource(R.string.setup_drive_title),
-                    subtitle = stringResource(
-                        if (driveConnected) R.string.setup_drive_connected else R.string.setup_drive_disconnected
-                    ),
-                    onClick = onConfigureDriveClick,
-                    modifier = Modifier.weight(1f)
-                )
+                // Columna derecha: orígenes remotos (preparada para futuras fuentes remotas)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.setup_column_remote),
+                        color = AccentPurple,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 2.dp)
+                    )
+                    SetupStatusTile(
+                        isConnected = driveConnected,
+                        icon = if (driveConnected) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                        title = stringResource(R.string.setup_drive_title),
+                        subtitle = stringResource(
+                            if (driveConnected) R.string.setup_drive_connected else R.string.setup_drive_disconnected
+                        ),
+                        onClick = onConfigureDriveClick,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             if (activeProfileId.isNotBlank()) {
@@ -137,12 +184,16 @@ private fun SetupStatusTile(
                     text = title,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
-                    color = TextPrimary
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     fontSize = 11.sp,
-                    color = accent
+                    color = accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

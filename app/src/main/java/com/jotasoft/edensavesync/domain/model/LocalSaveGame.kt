@@ -6,5 +6,7 @@ data class LocalSaveGame(
     val lastModifiedMs: Long,
     val totalSizeBytes: Long,
     val fileCount: Int,
-    val contentHash: String
+    val contentHash: String,
+    val source: LocalSaveSource = LocalSaveSource.EDEN,
+    val isMirroredAcrossAllConfiguredSources: Boolean = true
 )
