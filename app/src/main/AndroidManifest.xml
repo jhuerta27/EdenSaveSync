@@ -22,11 +22,13 @@
         android:name="android.software.leanback"
         android:required="false" />
 
-    <!-- Consultar paquetes de Eden para verificar instalación y DocumentsProvider -->
+    <!-- Consultar paquetes de Eden y Peanuts Native para verificar instalación y DocumentsProvider -->
     <queries>
         <package android:name="dev.eden.eden_emulator" />
         <package android:name="dev.eden.eden_emulator.ea" />
         <package android:name="org.yuzu.yuzu_emu" />
+        <package android:name="dev.nxnative.android.peanuts" />
+        <package android:name="moe.shizuku.privileged.api" />
         <intent>
             <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
         </intent>
@@ -77,6 +79,14 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 
 </manifest>

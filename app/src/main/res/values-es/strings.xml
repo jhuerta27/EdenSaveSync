@@ -39,7 +39,11 @@
     <string name="field_device_name">Nombre del dispositivo</string>
 
     <!-- Setup Status Card -->
-    <string name="setup_eden_folder_title">Carpeta Eden</string>
+    <string name="setup_column_local">LOCAL</string>
+    <string name="setup_column_remote">REMOTO</string>
+    <string name="setup_eden_folder_title">Eden</string>
+    <string name="setup_peanuts_folder_title">Peanuts Native</string>
+    <string name="setup_peanuts_folder_linked_shizuku">Vinculada (Shizuku)</string>
     <string name="setup_eden_folder_linked">Vinculada</string>
     <string name="setup_eden_folder_unlinked">Toca para vincular</string>
     <string name="setup_drive_title">Google Drive</string>
@@ -49,11 +53,11 @@
 
     <!-- Hero Card -->
     <string name="hero_title_syncing">Sincronizando partidas...</string>
-    <string name="hero_title_not_ready">Configura Eden y Google Drive para empezar</string>
+    <string name="hero_title_not_ready">Configura una carpeta local y Google Drive para empezar</string>
     <string name="hero_title_changes_ready">Cambios listos para sincronizar</string>
     <string name="hero_title_up_to_date">Todas tus partidas están al día</string>
     <string name="hero_title_ready_scan">Listo para escanear tus partidas</string>
-    <string name="hero_subtitle_not_ready">Vincula la carpeta nand/user/save y tu cuenta de Google Drive.</string>
+    <string name="hero_subtitle_not_ready">Vincula al menos una carpeta local (Eden o Peanuts Native) y tu cuenta de Google Drive.</string>
     <string name="hero_subtitle_changes">%1$d para subir a la nube • %2$d para descargar a este dispositivo</string>
     <string name="hero_subtitle_up_to_date">Tus dispositivos tienen la partida más reciente de cada juego.</string>
     <string name="hero_button_sync_changes">Sincronizar ahora (%1$d ⬆️ / %2$d ⬇️)</string>
@@ -63,10 +67,11 @@
     <string name="section_detected_saves">Partidas detectadas (%1$d)</string>
     <string name="status_scanning">Escaneando...</string>
     <string name="empty_saves_title_has_folder">No se encontraron partidas guardadas todavía</string>
-    <string name="empty_saves_title_no_folder">Vincula la carpeta de datos de Eden</string>
-    <string name="empty_saves_desc_has_folder">Asegúrate de haber seleccionado la carpeta de Eden (nand/user/save) o conecta Google Drive para descargar tus partidas desde otro dispositivo.</string>
-    <string name="empty_saves_desc_no_folder">Selecciona la carpeta de guardados de Eden para empezar a sincronizar entre tus dispositivos Android.</string>
-    <string name="empty_saves_button">Seleccionar carpeta de Eden</string>
+    <string name="empty_saves_title_no_folder">Vincula al menos una carpeta de guardados</string>
+    <string name="empty_saves_desc_has_folder">Asegúrate de haber seleccionado la carpeta correcta de Eden o Peanuts Native, o conecta Google Drive para descargar tus partidas desde otro dispositivo.</string>
+    <string name="empty_saves_desc_no_folder">Selecciona la carpeta de guardados de Eden, de Peanuts Native o ambas para empezar a sincronizar entre tus dispositivos Android.</string>
+    <string name="empty_saves_button">Vincular Eden</string>
+    <string name="empty_saves_button_peanuts">Vincular Peanuts Native</string>
 
     <!-- Game Item Card -->
     <string name="badge_upload_recommended">⬆️ Local más reciente</string>
@@ -80,11 +85,14 @@
     <string name="game_card_no_remote">No subida aún</string>
     <string name="game_card_remote_source">De: %1$s</string>
     <string name="game_card_stats">%1$s • %2$d arch.</string>
+    <string name="game_card_stats_with_source">%1$s • %2$s • %3$d arch.</string>
+    <string name="source_label_eden">Eden</string>
+    <string name="source_label_peanuts">Peanuts Native</string>
     <string name="game_card_action_upload">Subir</string>
     <string name="game_card_action_download">Descargar</string>
     <string name="game_card_action_restore_backup">Restaurar backup (%1$d)</string>
 
-    <!-- Eden Folder Setup Dialog -->
+    <!-- Local Folder Setup Dialogs -->
     <string name="dialog_folder_title">Vincular carpeta de Eden (Android/data)</string>
     <string name="dialog_folder_intro">Eden guarda tus partidas de Nintendo Switch en:\nAndroid/data/dev.eden.eden_emulator/files/nand/user/save</string>
     <string name="dialog_folder_option_a_title">Opción A — Proveedor nativo de Eden (Recomendado en Android 14/15/16):</string>
@@ -93,6 +101,16 @@
     <string name="dialog_folder_option_b_title">Opción B — Ruta directa Android/data (Consolas Android o carpeta personalizada):</string>
     <string name="dialog_folder_option_b_desc">Abre directamente Android/data/dev.eden.eden_emulator/files/nand/user/save o tu carpeta de usuario de Eden.</string>
     <string name="dialog_folder_option_b_button">Abrir carpeta Android/data o personalizada</string>
+
+    <string name="dialog_peanuts_folder_title">Vincular Peanuts Native (Requiere Shizuku)</string>
+    <string name="dialog_peanuts_folder_intro">Peanuts Native guarda sus partidas en:\nAndroid/data/dev.nxnative.android.peanuts/files/saves\n\n⚠️ Es necesario tener Shizuku instalado y activo para acceder a esta carpeta en Android 11+ (como Samsung Galaxy), ya que Android restringe Android/data y Peanuts Native no expone proveedor de documentos.</string>
+    <string name="dialog_peanuts_folder_option_a_title">Opción A — Acceso con Shizuku (Necesario en móviles Android 14/15/16):</string>
+    <string name="dialog_peanuts_folder_option_a_steps">1. Abre la app Shizuku e iníciala mediante Depuración inalámbrica.\n2. Pulsa el botón de abajo y acepta el permiso de Shizuku.\n3. La app accederá automáticamente a la carpeta saves de Peanuts Native.</string>
+    <string name="dialog_peanuts_folder_option_a_button">Conectar con Shizuku</string>
+    <string name="dialog_peanuts_folder_option_b_title">Opción B — Selector SAF directo (Consolas Android o carpeta personalizada):</string>
+    <string name="dialog_peanuts_folder_option_b_desc">Solo si tu dispositivo permite abrir Android/data sin restricciones o si usas una carpeta personalizada.</string>
+    <string name="dialog_peanuts_folder_option_b_button">Abrir carpeta saves o personalizada</string>
+    <string name="dialog_folder_unlink_button">Desvincular esta carpeta</string>
 
     <!-- Drive Config Dialog -->
     <string name="dialog_drive_title">Conectar Google Drive</string>
@@ -113,11 +131,20 @@
 
     <!-- ViewModel Status & Toast Messages -->
     <string name="msg_folder_linked">Carpeta de Eden vinculada correctamente.</string>
+    <string name="msg_peanuts_folder_linked">Carpeta de Peanuts Native vinculada correctamente.</string>
+    <string name="msg_folder_unlinked">Carpeta de Eden desvinculada.</string>
+    <string name="msg_peanuts_folder_unlinked">Carpeta de Peanuts Native desvinculada.</string>
+    <string name="msg_shizuku_not_installed">Es necesario instalar la app Shizuku para sincronizar Peanuts Native en este dispositivo.</string>
+    <string name="msg_shizuku_not_running">Shizuku no está iniciado. Abre la app Shizuku, actívala (Depuración inalámbrica) y vuelve a intentarlo.</string>
+    <string name="msg_shizuku_permission_denied">Permiso de Shizuku denegado. Es necesario autorizarlo para acceder a las partidas de Peanuts Native.</string>
+    <string name="msg_shizuku_permission_required">Falta autorizar el permiso de Shizuku para acceder a Peanuts Native.</string>
+    <string name="msg_shizuku_bind_failed">No se pudo conectar al servicio de Shizuku.</string>
+    <string name="msg_shizuku_external_cache_unavailable">No se pudo acceder a la caché externa necesaria para transferir archivos con Shizuku.</string>
     <string name="msg_waiting_browser_auth">Esperando autorización de Google en el navegador...</string>
     <string name="msg_drive_connected">¡Cuenta de Google Drive conectada con éxito!</string>
     <string name="msg_drive_auth_error">Error al autorizar Google Drive</string>
     <string name="msg_drive_disconnected">Cuenta de Google Drive desconectada.</string>
-    <string name="msg_link_folder_first">Primero vincula la carpeta de guardados de Eden.</string>
+    <string name="msg_link_folder_first">Primero vincula al menos una carpeta local (Eden o Peanuts Native).</string>
     <string name="msg_connect_drive_first">Primero conecta tu cuenta de Google Drive.</string>
     <string name="msg_sync_starting">Iniciando sincronización...</string>
     <string name="msg_all_in_sync">¡Todo está al día! Tus partidas ya están sincronizadas entre ambos dispositivos.</string>

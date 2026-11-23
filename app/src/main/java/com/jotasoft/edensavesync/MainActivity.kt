@@ -14,6 +14,9 @@ import com.jotasoft.edensavesync.core.navigation.AppNavigation
 import com.jotasoft.edensavesync.data.device.GamepadInputHandler
 import com.jotasoft.edensavesync.data.device.GamepadScrollController
 import com.jotasoft.edensavesync.data.storage.EdenStorageManager
+import com.jotasoft.edensavesync.data.storage.shizuku.ShizukuPeanutsClient
+import com.jotasoft.edensavesync.data.storage.shizuku.ShizukuStatus
+import com.jotasoft.edensavesync.domain.model.LocalSaveSource
 import com.jotasoft.edensavesync.presentation.sync.EdenSyncViewModel
 import com.jotasoft.edensavesync.ui.theme.EdenSaveSyncTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -25,8 +28,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var storageManager: EdenStorageManager
 
+    @Inject
+    lateinit var shizukuPeanutsClient: ShizukuPeanutsClient
+
     private val viewModel: EdenSyncViewModel by viewModels()
     private val gamepadInputHandler = GamepadInputHandler()
+    private var cancelShizukuPermissionListener: (() -> Unit)? = null
     var onStartButtonHandler: (() -> Boolean)? = null
 
     override fun onNewIntent(intent: Intent) {
@@ -73,6 +80,8 @@ class MainActivity : ComponentActivity() {
                 AppNavigation(
                     viewModel = viewModel,
                     onOpenEdenFolderIntent = storageManager::createOpenEdenFolderIntent,
+                    onOpenPeanutsFolderIntent = storageManager::createOpenPeanutsFolderIntent,
+                    onConnectPeanutsWithShizuku = ::connectPeanutsWithShizuku,
                     onOpenBrowserAuthUrl = { authUrl ->
                         runOnUiThread {
                             startActivity(Intent(Intent.ACTION_VIEW, authUrl.toUri()))
@@ -81,6 +90,44 @@ class MainActivity : ComponentActivity() {
                     onRegisterStartButtonHandler = { handler ->
                         onStartButtonHandler = handler
                     }
+                )
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        cancelShizukuPermissionListener?.invoke()
+        cancelShizukuPermissionListener = null
+        super.onDestroy()
+    }
+
+    private fun connectPeanutsWithShizuku() {
+        cancelShizukuPermissionListener?.invoke()
+        cancelShizukuPermissionListener = null
+        when (shizukuPeanutsClient.checkStatus()) {
+            ShizukuStatus.NOT_INSTALLED -> viewModel.showStatusError(R.string.msg_shizuku_not_installed)
+            ShizukuStatus.NOT_RUNNING -> viewModel.showStatusError(R.string.msg_shizuku_not_running)
+            ShizukuStatus.PERMISSION_REQUIRED -> {
+                val vm = viewModel
+                cancelShizukuPermissionListener = shizukuPeanutsClient.requestPermission { granted ->
+                    if (!isDestroyed && !isFinishing) {
+                        runOnUiThread {
+                            if (granted) {
+                                vm.onFolderSelected(
+                                    LocalSaveSource.PEANUTS_NATIVE,
+                                    ShizukuPeanutsClient.SHIZUKU_PEANUTS_URI.toUri()
+                                )
+                            } else {
+                                vm.showStatusError(R.string.msg_shizuku_permission_denied)
+                            }
+                        }
+                    }
+                }
+            }
+            ShizukuStatus.READY -> {
+                viewModel.onFolderSelected(
+                    LocalSaveSource.PEANUTS_NATIVE,
+                    ShizukuPeanutsClient.SHIZUKU_PEANUTS_URI.toUri()
                 )
             }
         }

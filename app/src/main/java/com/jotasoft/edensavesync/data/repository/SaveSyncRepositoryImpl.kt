@@ -95,73 +95,30 @@ class SaveSyncRepositoryImpl @Inject constructor(
         }
 
     override suspend fun uploadSingleGame(item: GameSyncItem): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            val local = item.localSave
-                ?: throw IllegalStateException("No existe partida local para ${item.displayName}")
-            if (local.fileCount == 0 || local.totalSizeBytes == 0L) {
-                throw IllegalStateException("No se puede subir una partida vacía sin archivos para ${item.displayName}")
-            }
-            val tempZip = File(context.cacheDir, "upload_${item.titleId}.zip")
-            try {
-                if (!storageRepo.exportSaveToZip(item.titleId, tempZip)) {
-                    throw IllegalStateException("No se pudo empaquetar la partida local de ${item.titleId}")
-                }
-                val remote = cloudRepo.uploadSaveZip(
-                    localSave = local,
-                    gameName = item.displayName,
-                    deviceName = prefs.deviceName,
-                    zipFile = tempZip,
-                    existingDriveFileId = item.remoteSave?.driveFileId
-                )
-                prefs.recordSyncedTitle(
-                    titleId = item.titleId,
-                    contentHash = local.contentHash,
-                    remoteTimestampMs = remote.lastModifiedMs,
-                    localTimestampAtSyncMs = if (local.lastModifiedMs > 0L) local.lastModifiedMs else remote.lastModifiedMs
-                )
-            } finally {
-                if (tempZip.exists()) tempZip.delete()
-            }
-        }.onFailure { if (it is CancellationException) throw it }
+        SaveSyncOperations.uploadSingleGame(
+            item = item,
+            cacheDir = context.cacheDir,
+            storageRepo = storageRepo,
+            cloudRepo = cloudRepo,
+            deviceName = prefs.deviceName,
+            onRecordSynced = prefs::recordSyncedTitle
+        )
     }
 
     override suspend fun downloadSingleGame(item: GameSyncItem): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            val remote = item.remoteSave
-                ?: throw IllegalStateException("No existe partida en la nube para ${item.displayName}")
-            val tempZip = File(context.cacheDir, "download_${item.titleId}.zip")
-            try {
-                cloudRepo.downloadSaveZip(remote.driveFileId, tempZip)
-                if (!storageRepo.importSaveFromZip(item.titleId, tempZip)) {
-                    throw IllegalStateException("No se pudo escribir en la carpeta de Eden para ${item.titleId}")
-                }
-                if (remote.gameName.isNotBlank() &&
-                    !remote.gameName.startsWith("Juego de Switch") &&
-                    prefs.getCustomGameNames()[item.titleId].isNullOrBlank()
-                ) {
-                    prefs.setCustomGameName(item.titleId, remote.gameName)
-                }
-                val updatedLocal = storageRepo.scanSingleSave(item.titleId)
-                val effectiveHash = updatedLocal?.contentHash?.takeIf { it.isNotBlank() } ?: remote.contentHash
-                val effectiveLocalTs = updatedLocal?.lastModifiedMs?.takeIf { it > 0L } ?: remote.lastModifiedMs
-                prefs.recordSyncedTitle(
-                    titleId = item.titleId,
-                    contentHash = effectiveHash,
-                    remoteTimestampMs = remote.lastModifiedMs,
-                    localTimestampAtSyncMs = effectiveLocalTs
-                )
-            } finally {
-                if (tempZip.exists()) tempZip.delete()
-            }
-        }.onFailure { if (it is CancellationException) throw it }
+        SaveSyncOperations.downloadSingleGame(
+            item = item,
+            cacheDir = context.cacheDir,
+            storageRepo = storageRepo,
+            cloudRepo = cloudRepo,
+            getCustomGameNames = prefs::getCustomGameNames,
+            setCustomGameName = prefs::setCustomGameName,
+            onRecordSynced = prefs::recordSyncedTitle
+        )
     }
 
     override suspend fun restoreLatestBackup(item: GameSyncItem): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            if (!storageRepo.restoreLatestBackup(item.titleId)) {
-                throw IllegalStateException("No se pudo restaurar la copia de seguridad de ${item.titleId}")
-            }
-        }.onFailure { if (it is CancellationException) throw it }
+        SaveSyncOperations.restoreLatestBackup(item, storageRepo)
     }
 
     override fun renameGame(titleId: String, customName: String) =
@@ -177,4 +134,114 @@ class SaveSyncRepositoryImpl @Inject constructor(
         customNames = prefs.getCustomGameNames(),
         getLocalBackupCount = storageRepo::getLocalBackupCount
     )
+}
+
+internal object SaveSyncOperations {
+
+    suspend fun uploadSingleGame(
+        item: GameSyncItem,
+        cacheDir: File,
+        storageRepo: EdenStorageRepository,
+        cloudRepo: CloudSyncRepository,
+        deviceName: String,
+        onRecordSynced: (titleId: String, contentHash: String, remoteTs: Long, localTs: Long) -> Unit
+    ): Result<Unit> = runCatching {
+        val local = item.localSave
+            ?: throw IllegalStateException("No existe partida local para ${item.displayName}")
+        if (local.fileCount == 0 || local.totalSizeBytes == 0L) {
+            throw IllegalStateException("No se puede subir una partida vacía sin archivos para ${item.displayName}")
+        }
+        val tempZip = File(cacheDir, "upload_${item.titleId}.zip")
+        try {
+            if (!storageRepo.exportSaveToZip(item.titleId, tempZip, local.source)) {
+                throw IllegalStateException("No se pudo empaquetar la partida local de ${item.titleId}")
+            }
+            val remote = cloudRepo.uploadSaveZip(
+                localSave = local,
+                gameName = item.displayName,
+                deviceName = deviceName,
+                zipFile = tempZip,
+                existingDriveFileId = item.remoteSave?.driveFileId
+            )
+            // Registrar inmediatamente el estado sincronizado con Drive para evitar subidas duplicadas
+            // si falla la réplica posterior hacia la otra carpeta local.
+            onRecordSynced(
+                item.titleId,
+                local.contentHash,
+                remote.lastModifiedMs,
+                if (local.lastModifiedMs > 0L) local.lastModifiedMs else remote.lastModifiedMs
+            )
+            // Si hay otras carpetas locales vinculadas (p. ej. Eden <-> Peanuts Native),
+            // replicar la versión más reciente para que todas queden igualadas.
+            val otherLocalTargets = storageRepo.getConfiguredSources() - local.source
+            if (otherLocalTargets.isNotEmpty()) {
+                storageRepo.importSaveFromZip(item.titleId, tempZip, otherLocalTargets).onFailure { mirrorErr ->
+                    if (mirrorErr is CancellationException) throw mirrorErr
+                    throw IllegalStateException(
+                        "Subida a Google Drive completada, pero falló la réplica local: ${mirrorErr.message}",
+                        mirrorErr
+                    )
+                }
+            }
+        } finally {
+            if (tempZip.exists()) tempZip.delete()
+        }
+    }.onFailure { if (it is CancellationException) throw it }
+
+    suspend fun downloadSingleGame(
+        item: GameSyncItem,
+        cacheDir: File,
+        storageRepo: EdenStorageRepository,
+        cloudRepo: CloudSyncRepository,
+        getCustomGameNames: () -> Map<String, String>,
+        setCustomGameName: (String, String) -> Unit,
+        onRecordSynced: (titleId: String, contentHash: String, remoteTs: Long, localTs: Long) -> Unit
+    ): Result<Unit> = runCatching {
+        val remote = item.remoteSave
+            ?: throw IllegalStateException("No existe partida en la nube para ${item.displayName}")
+        val local = item.localSave
+        val tempZip = File(cacheDir, "download_${item.titleId}.zip")
+        try {
+            // Si una carpeta local ya coincide exactamente con Drive y solo falta replicar a otra
+            // carpeta local vinculada, replicar localmente sin descargar de nuevo ni sobrescribir
+            // el origen ya sincronizado.
+            val otherLocalTargets = if (local != null) {
+                storageRepo.getConfiguredSources() - local.source
+            } else {
+                emptySet()
+            }
+            val canMirrorLocally = local != null &&
+                local.contentHash.isNotBlank() &&
+                local.contentHash == remote.contentHash &&
+                !local.isMirroredAcrossAllConfiguredSources &&
+                otherLocalTargets.isNotEmpty() &&
+                storageRepo.exportSaveToZip(item.titleId, tempZip, local.source)
+
+            if (canMirrorLocally) {
+                storageRepo.importSaveFromZip(item.titleId, tempZip, otherLocalTargets).getOrThrow()
+            } else {
+                cloudRepo.downloadSaveZip(remote.driveFileId, tempZip)
+                storageRepo.importSaveFromZip(item.titleId, tempZip).getOrThrow()
+            }
+            if (remote.gameName.isNotBlank() &&
+                !remote.gameName.startsWith("Juego de Switch") &&
+                getCustomGameNames()[item.titleId].isNullOrBlank()
+            ) {
+                setCustomGameName(item.titleId, remote.gameName)
+            }
+            val updatedLocal = storageRepo.scanSingleSave(item.titleId)
+            val effectiveHash = updatedLocal?.contentHash?.takeIf { it.isNotBlank() } ?: remote.contentHash
+            val effectiveLocalTs = updatedLocal?.lastModifiedMs?.takeIf { it > 0L } ?: remote.lastModifiedMs
+            onRecordSynced(item.titleId, effectiveHash, remote.lastModifiedMs, effectiveLocalTs)
+        } finally {
+            if (tempZip.exists()) tempZip.delete()
+        }
+    }.onFailure { if (it is CancellationException) throw it }
+
+    suspend fun restoreLatestBackup(
+        item: GameSyncItem,
+        storageRepo: EdenStorageRepository
+    ): Result<Unit> = runCatching {
+        storageRepo.restoreLatestBackup(item.titleId).getOrThrow()
+    }.onFailure { if (it is CancellationException) throw it }
 }
