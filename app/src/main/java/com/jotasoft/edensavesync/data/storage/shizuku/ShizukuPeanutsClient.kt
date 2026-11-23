@@ -5,7 +5,10 @@ import android.content.Context
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.DeadObjectException
 import android.os.IBinder
+import android.os.RemoteException
+import com.jotasoft.edensavesync.R
 import com.jotasoft.edensavesync.domain.model.LocalSaveGame
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +43,7 @@ class ShizukuPeanutsClient @Inject constructor(
         const val PEANUTS_SAVES_PATH = "/storage/emulated/0/Android/data/dev.nxnative.android.peanuts/files/saves"
         private const val SHIZUKU_PERMISSION_REQUEST_CODE = 202612
         private const val SERVICE_BIND_TIMEOUT_MS = 10_000L
+        private const val MIN_VALID_ZIP_BYTES = 22L
 
         fun isShizukuUri(uri: Uri?): Boolean =
             uri?.scheme.equals("shizuku", ignoreCase = true)
@@ -48,6 +52,12 @@ class ShizukuPeanutsClient @Inject constructor(
     private val bindMutex = Mutex()
     @Volatile
     private var cachedService: IPeanutsFileService? = null
+    @Volatile
+    private var cachedConnection: ServiceConnection? = null
+    @Volatile
+    private var cachedArgs: Shizuku.UserServiceArgs? = null
+    @Volatile
+    private var activePermissionListener: Shizuku.OnRequestPermissionResultListener? = null
 
     fun checkStatus(): ShizukuStatus {
         val installed = runCatching {
@@ -62,24 +72,39 @@ class ShizukuPeanutsClient @Inject constructor(
         }
     }
 
-    fun requestPermission(onResult: (Boolean) -> Unit) {
+    /**
+     * Solicita permiso de Shizuku y devuelve una función para cancelar/desregistrar el listener
+     * (p. ej. en `Activity.onDestroy`) evitando retener referencias fuertes a la Activity.
+     */
+    fun requestPermission(onResult: (Boolean) -> Unit): () -> Unit {
+        clearPermissionListener()
         if (!Shizuku.pingBinder()) {
             onResult(false)
-            return
+            return {}
         }
         if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
             onResult(true)
-            return
+            return {}
         }
-        lateinit var listener: Shizuku.OnRequestPermissionResultListener
-        listener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-            if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE) {
-                Shizuku.removeRequestPermissionResultListener(listener)
-                onResult(grantResult == PackageManager.PERMISSION_GRANTED)
+        val listener = object : Shizuku.OnRequestPermissionResultListener {
+            override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
+                if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE) {
+                    clearPermissionListener()
+                    onResult(grantResult == PackageManager.PERMISSION_GRANTED)
+                }
             }
         }
+        activePermissionListener = listener
         Shizuku.addRequestPermissionResultListener(listener)
         Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_CODE)
+        return ::clearPermissionListener
+    }
+
+    fun clearPermissionListener() {
+        activePermissionListener?.let { listener ->
+            runCatching { Shizuku.removeRequestPermissionResultListener(listener) }
+            activePermissionListener = null
+        }
     }
 
     suspend fun scanLocalSaves(): List<LocalSaveGame> = withContext(Dispatchers.IO) {
@@ -99,7 +124,7 @@ class ShizukuPeanutsClient @Inject constructor(
             val exported = withService { service ->
                 service.exportTitleSaveToZip(PEANUTS_SAVES_PATH, titleId, transferZip.absolutePath)
             }
-            if (!exported || !transferZip.exists() || transferZip.length() <= 22L) {
+            if (!exported || !transferZip.exists() || transferZip.length() <= MIN_VALID_ZIP_BYTES) {
                 return@withContext false
             }
             destZipFile.parentFile?.mkdirs()
@@ -115,7 +140,7 @@ class ShizukuPeanutsClient @Inject constructor(
         srcZipFile: File,
         onBackupExported: (File) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
-        if (!srcZipFile.exists() || srcZipFile.length() <= 22L) return@withContext false
+        if (!srcZipFile.exists() || srcZipFile.length() <= MIN_VALID_ZIP_BYTES) return@withContext false
 
         // Crear respaldo previo si existía una partida en Peanuts Native
         val backupTransferZip = createTransferZipFile("backup_${titleId}_${System.currentTimeMillis()}.zip")
@@ -125,7 +150,7 @@ class ShizukuPeanutsClient @Inject constructor(
                     service.exportTitleSaveToZip(PEANUTS_SAVES_PATH, titleId, backupTransferZip.absolutePath)
                 }
             }.getOrDefault(false)
-            if (hadExisting && backupTransferZip.exists() && backupTransferZip.length() > 100L) {
+            if (hadExisting && backupTransferZip.exists() && backupTransferZip.length() > MIN_VALID_ZIP_BYTES) {
                 onBackupExported(backupTransferZip)
             }
         } finally {
@@ -145,14 +170,33 @@ class ShizukuPeanutsClient @Inject constructor(
 
     // Zona de intercambio accesible tanto por nuestra app como por el proceso shell de Shizuku
     private fun createTransferZipFile(fileName: String): File {
-        val baseDir = context.externalCacheDir ?: context.cacheDir
+        val baseDir = context.externalCacheDir
+            ?: throw IllegalStateException(context.getString(R.string.msg_shizuku_external_cache_unavailable))
         val transferDir = File(baseDir, "shizuku_transfer").apply { mkdirs() }
         return File(transferDir, fileName)
     }
 
-    private suspend fun <T> withService(block: (IPeanutsFileService) -> T): T {
-        val service = getOrBindService()
-        return block(service)
+    private suspend fun <T> withService(block: (IPeanutsFileService) -> T): T =
+        try {
+            block(getOrBindService())
+        } catch (e: RemoteException) {
+            if (e is DeadObjectException || cachedService != null) {
+                invalidateCachedService()
+                block(getOrBindService())
+            } else {
+                throw e
+            }
+        }
+
+    private suspend fun invalidateCachedService() = bindMutex.withLock {
+        val oldConn = cachedConnection
+        val oldArgs = cachedArgs
+        cachedService = null
+        cachedConnection = null
+        cachedArgs = null
+        if (oldConn != null && oldArgs != null) {
+            runCatching { Shizuku.unbindUserService(oldArgs, oldConn, true) }
+        }
     }
 
     private suspend fun getOrBindService(): IPeanutsFileService = bindMutex.withLock {
@@ -163,11 +207,11 @@ class ShizukuPeanutsClient @Inject constructor(
 
         when (checkStatus()) {
             ShizukuStatus.NOT_INSTALLED ->
-                throw IllegalStateException("Shizuku no está instalado. Instálalo e inícialo para sincronizar Peanuts Native.")
+                throw IllegalStateException(context.getString(R.string.msg_shizuku_not_installed))
             ShizukuStatus.NOT_RUNNING ->
-                throw IllegalStateException("Shizuku no está activo. Abre Shizuku e inícialo para sincronizar Peanuts Native.")
+                throw IllegalStateException(context.getString(R.string.msg_shizuku_not_running))
             ShizukuStatus.PERMISSION_REQUIRED ->
-                throw IllegalStateException("Falta autorizar el permiso de Shizuku para Peanuts Native.")
+                throw IllegalStateException(context.getString(R.string.msg_shizuku_permission_required))
             ShizukuStatus.READY -> Unit
         }
 
@@ -183,20 +227,34 @@ class ShizukuPeanutsClient @Inject constructor(
             suspendCancellableCoroutine { cont ->
                 val connection = object : ServiceConnection {
                     override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                        if (!cont.isActive) {
+                            runCatching { Shizuku.unbindUserService(args, this, true) }
+                            return
+                        }
                         if (binder != null && binder.pingBinder()) {
                             val iface = IPeanutsFileService.Stub.asInterface(binder)
                             cachedService = iface
-                            if (cont.isActive) cont.resume(iface)
-                        } else if (cont.isActive) {
+                            cachedConnection = this
+                            cachedArgs = args
+                            cont.resume(iface)
+                        } else {
+                            runCatching { Shizuku.unbindUserService(args, this, true) }
                             cont.resumeWithException(
-                                IllegalStateException("No se pudo conectar al servicio de Shizuku.")
+                                IllegalStateException(context.getString(R.string.msg_shizuku_bind_failed))
                             )
                         }
                     }
 
                     override fun onServiceDisconnected(name: ComponentName?) {
-                        cachedService = null
+                        if (cachedConnection === this) {
+                            cachedService = null
+                            cachedConnection = null
+                            cachedArgs = null
+                        }
                     }
+                }
+                cont.invokeOnCancellation {
+                    runCatching { Shizuku.unbindUserService(args, connection, true) }
                 }
                 Shizuku.bindUserService(args, connection)
             }

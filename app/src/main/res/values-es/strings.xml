@@ -137,6 +137,9 @@
     <string name="msg_shizuku_not_installed">Es necesario instalar la app Shizuku para sincronizar Peanuts Native en este dispositivo.</string>
     <string name="msg_shizuku_not_running">Shizuku no está iniciado. Abre la app Shizuku, actívala (Depuración inalámbrica) y vuelve a intentarlo.</string>
     <string name="msg_shizuku_permission_denied">Permiso de Shizuku denegado. Es necesario autorizarlo para acceder a las partidas de Peanuts Native.</string>
+    <string name="msg_shizuku_permission_required">Falta autorizar el permiso de Shizuku para acceder a Peanuts Native.</string>
+    <string name="msg_shizuku_bind_failed">No se pudo conectar al servicio de Shizuku.</string>
+    <string name="msg_shizuku_external_cache_unavailable">No se pudo acceder a la caché externa necesaria para transferir archivos con Shizuku.</string>
     <string name="msg_waiting_browser_auth">Esperando autorización de Google en el navegador...</string>
     <string name="msg_drive_connected">¡Cuenta de Google Drive conectada con éxito!</string>
     <string name="msg_drive_auth_error">Error al autorizar Google Drive</string>

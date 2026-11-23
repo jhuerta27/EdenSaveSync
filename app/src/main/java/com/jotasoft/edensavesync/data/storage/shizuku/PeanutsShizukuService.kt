@@ -23,9 +23,6 @@ class PeanutsShizukuService : IPeanutsFileService.Stub {
         exitProcess(0)
     }
 
-    override fun isDirectoryAccessible(savesDirPath: String): Boolean =
-        PeanutsShizukuFileHelper.isDirectoryAccessible(File(savesDirPath))
-
     override fun scanSavesJson(savesDirPath: String): String =
         PeanutsShizukuFileHelper.toJsonArray(PeanutsShizukuFileHelper.scanSaves(File(savesDirPath)))
 

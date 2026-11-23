@@ -56,13 +56,10 @@ class EdenStorageManager @Inject constructor(
         return createOpenTreeIntent(initialUri)
     }
 
-    fun createOpenPeanutsFolderIntent(usePeanutsProvider: Boolean = false): Intent {
-        val initialUri = if (usePeanutsProvider) {
-            "content://$PEANUTS_PACKAGE.documents/tree/root".toUri()
-        } else {
-            val encodedPath = Uri.encode("Android/data/$PEANUTS_PACKAGE/files/saves")
+    fun createOpenPeanutsFolderIntent(): Intent {
+        val encodedPath = Uri.encode("Android/data/$PEANUTS_PACKAGE/files/saves")
+        val initialUri =
             "content://com.android.externalstorage.documents/tree/primary%3A$encodedPath/document/primary%3A$encodedPath".toUri()
-        }
         return createOpenTreeIntent(initialUri)
     }
 
@@ -367,7 +364,7 @@ class EdenStorageManager @Inject constructor(
             val backupDir = backupDirFor(titleId).apply { mkdirs() }
             val backupFile = File(backupDir, "backup_${System.currentTimeMillis()}.zip")
             val exported = exportTitleSaveToZip(treeUri, titleId, backupFile, source)
-            if ((!exported || backupFile.length() <= 100L) && backupFile.exists()) {
+            if ((!exported || backupFile.length() <= 22L) && backupFile.exists()) {
                 backupFile.delete()
             }
             backupDir.listFiles { f -> f.extension == "zip" }
@@ -382,7 +379,7 @@ class EdenStorageManager @Inject constructor(
 
     fun saveBackupFromZip(titleId: String, sourceBackupZip: File) {
         runCatching {
-            if (!sourceBackupZip.exists() || sourceBackupZip.length() <= 100L) return
+            if (!sourceBackupZip.exists() || sourceBackupZip.length() <= 22L) return
             val backupDir = backupDirFor(titleId).apply { mkdirs() }
             val backupFile = File(backupDir, "backup_${System.currentTimeMillis()}.zip")
             sourceBackupZip.copyTo(backupFile, overwrite = true)

@@ -23,4 +23,5 @@ interface EdenStorageRepository {
     ): Result<Unit>
     suspend fun restoreLatestBackup(titleId: String): Result<Unit>
     fun getLocalBackupCount(titleId: String): Int
+    fun consumeLastScanWarning(): String? = null
 }

@@ -163,18 +163,26 @@ internal object SaveSyncOperations {
                 zipFile = tempZip,
                 existingDriveFileId = item.remoteSave?.driveFileId
             )
-            // Si hay otras carpetas locales vinculadas (p. ej. Eden <-> Peanuts Native),
-            // replicar la versión más reciente para que todas queden igualadas.
-            val otherLocalTargets = storageRepo.getConfiguredSources() - local.source
-            if (otherLocalTargets.isNotEmpty()) {
-                storageRepo.importSaveFromZip(item.titleId, tempZip, otherLocalTargets).getOrThrow()
-            }
+            // Registrar inmediatamente el estado sincronizado con Drive para evitar subidas duplicadas
+            // si falla la réplica posterior hacia la otra carpeta local.
             onRecordSynced(
                 item.titleId,
                 local.contentHash,
                 remote.lastModifiedMs,
                 if (local.lastModifiedMs > 0L) local.lastModifiedMs else remote.lastModifiedMs
             )
+            // Si hay otras carpetas locales vinculadas (p. ej. Eden <-> Peanuts Native),
+            // replicar la versión más reciente para que todas queden igualadas.
+            val otherLocalTargets = storageRepo.getConfiguredSources() - local.source
+            if (otherLocalTargets.isNotEmpty()) {
+                storageRepo.importSaveFromZip(item.titleId, tempZip, otherLocalTargets).onFailure { mirrorErr ->
+                    if (mirrorErr is CancellationException) throw mirrorErr
+                    throw IllegalStateException(
+                        "Subida a Google Drive completada, pero falló la réplica local: ${mirrorErr.message}",
+                        mirrorErr
+                    )
+                }
+            }
         } finally {
             if (tempZip.exists()) tempZip.delete()
         }
@@ -191,10 +199,30 @@ internal object SaveSyncOperations {
     ): Result<Unit> = runCatching {
         val remote = item.remoteSave
             ?: throw IllegalStateException("No existe partida en la nube para ${item.displayName}")
+        val local = item.localSave
         val tempZip = File(cacheDir, "download_${item.titleId}.zip")
         try {
-            cloudRepo.downloadSaveZip(remote.driveFileId, tempZip)
-            storageRepo.importSaveFromZip(item.titleId, tempZip).getOrThrow()
+            // Si una carpeta local ya coincide exactamente con Drive y solo falta replicar a otra
+            // carpeta local vinculada, replicar localmente sin descargar de nuevo ni sobrescribir
+            // el origen ya sincronizado.
+            val otherLocalTargets = if (local != null) {
+                storageRepo.getConfiguredSources() - local.source
+            } else {
+                emptySet()
+            }
+            val canMirrorLocally = local != null &&
+                local.contentHash.isNotBlank() &&
+                local.contentHash == remote.contentHash &&
+                !local.isMirroredAcrossAllConfiguredSources &&
+                otherLocalTargets.isNotEmpty() &&
+                storageRepo.exportSaveToZip(item.titleId, tempZip, local.source)
+
+            if (canMirrorLocally) {
+                storageRepo.importSaveFromZip(item.titleId, tempZip, otherLocalTargets).getOrThrow()
+            } else {
+                cloudRepo.downloadSaveZip(remote.driveFileId, tempZip)
+                storageRepo.importSaveFromZip(item.titleId, tempZip).getOrThrow()
+            }
             if (remote.gameName.isNotBlank() &&
                 !remote.gameName.startsWith("Juego de Switch") &&
                 getCustomGameNames()[item.titleId].isNullOrBlank()

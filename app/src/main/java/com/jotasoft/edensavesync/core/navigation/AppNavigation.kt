@@ -24,7 +24,7 @@ import com.jotasoft.edensavesync.presentation.sync.EdenSyncViewModel
 fun AppNavigation(
     viewModel: EdenSyncViewModel,
     onOpenEdenFolderIntent: (useEdenProvider: Boolean) -> Intent,
-    onOpenPeanutsFolderIntent: (usePeanutsProvider: Boolean) -> Intent,
+    onOpenPeanutsFolderIntent: () -> Intent,
     onConnectPeanutsWithShizuku: () -> Unit,
     onOpenBrowserAuthUrl: (String) -> Unit,
     modifier: Modifier = Modifier,

@@ -7,6 +7,7 @@ import com.jotasoft.edensavesync.data.storage.EdenStorageManager
 import com.jotasoft.edensavesync.data.storage.shizuku.ShizukuPeanutsClient
 import com.jotasoft.edensavesync.domain.model.LocalSaveGame
 import com.jotasoft.edensavesync.domain.model.LocalSaveSource
+import com.jotasoft.edensavesync.domain.model.SyncedRecord
 import com.jotasoft.edensavesync.domain.repository.EdenStorageRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,6 +22,9 @@ class EdenStorageRepositoryImpl @Inject constructor(
     private val shizukuPeanutsClient: ShizukuPeanutsClient,
     private val prefs: AppPreferences
 ) : EdenStorageRepository {
+
+    @Volatile
+    private var lastScanWarning: String? = null
 
     override fun isFolderConfigured(): Boolean = getConfiguredSources().isNotEmpty()
 
@@ -40,39 +44,33 @@ class EdenStorageRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun consumeLastScanWarning(): String? {
+        val warning = lastScanWarning
+        lastScanWarning = null
+        return warning
+    }
+
     override suspend fun scanLocalSaves(): Pair<String, List<LocalSaveGame>> =
         withContext(Dispatchers.IO) {
             val configured = getConfiguredSources()
-            if (configured.isEmpty()) return@withContext "" to emptyList()
+            if (configured.isEmpty()) {
+                lastScanWarning = null
+                return@withContext "" to emptyList()
+            }
 
-            var edenProfileId = ""
-            val candidatesByTitle = mutableMapOf<String, MutableList<LocalSaveGame>>()
-
-            for (source in configured) {
-                val uri = treeUriFor(source) ?: continue
-                val (profileId, saves) = if (source == LocalSaveSource.PEANUTS_NATIVE && ShizukuPeanutsClient.isShizukuUri(uri)) {
+            val outcome = MultiSourceStorageHelper.scanAllSources(
+                configuredSources = configured,
+                syncedRecords = prefs.getSyncedRecords()
+            ) { source ->
+                val uri = treeUriFor(source) ?: return@scanAllSources "" to emptyList()
+                if (source == LocalSaveSource.PEANUTS_NATIVE && ShizukuPeanutsClient.isShizukuUri(uri)) {
                     "" to shizukuPeanutsClient.scanLocalSaves()
                 } else {
                     storageManager.scanLocalSaves(uri, source)
                 }
-                if (source == LocalSaveSource.EDEN && profileId.isNotBlank()) {
-                    edenProfileId = profileId
-                }
-                for (save in saves) {
-                    candidatesByTitle.getOrPut(save.titleId.uppercase()) { mutableListOf() }.add(save)
-                }
             }
-
-            val syncedRecords = prefs.getSyncedRecords()
-            val merged = candidatesByTitle.mapNotNull { (titleId, candidates) ->
-                SaveReconciler.selectLatestLocalSave(
-                    candidates = candidates,
-                    configuredSourceCount = configured.size,
-                    syncedRecord = syncedRecords[titleId]
-                )
-            }.sortedByDescending { it.lastModifiedMs }
-
-            edenProfileId to merged
+            lastScanWarning = outcome.warningMessage
+            outcome.edenProfileId to outcome.saves
         }
 
     override suspend fun scanSingleSave(titleId: String): LocalSaveGame? =
@@ -80,17 +78,25 @@ class EdenStorageRepositoryImpl @Inject constructor(
             val configured = getConfiguredSources()
             if (configured.isEmpty()) return@withContext null
 
-            val candidates = configured.mapNotNull { source ->
-                val uri = treeUriFor(source) ?: return@mapNotNull null
-                if (source == LocalSaveSource.PEANUTS_NATIVE && ShizukuPeanutsClient.isShizukuUri(uri)) {
-                    shizukuPeanutsClient.scanSingleSave(titleId)
-                } else {
-                    storageManager.scanSingleTitleSave(uri, titleId, source)
+            val candidates = mutableListOf<LocalSaveGame>()
+            var scannedCount = 0
+            for (source in configured) {
+                val uri = treeUriFor(source) ?: continue
+                try {
+                    val save = if (source == LocalSaveSource.PEANUTS_NATIVE && ShizukuPeanutsClient.isShizukuUri(uri)) {
+                        shizukuPeanutsClient.scanSingleSave(titleId)
+                    } else {
+                        storageManager.scanSingleTitleSave(uri, titleId, source)
+                    }
+                    scannedCount++
+                    if (save != null) candidates.add(save)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                 }
             }
             SaveReconciler.selectLatestLocalSave(
                 candidates = candidates,
-                configuredSourceCount = configured.size,
+                configuredSourceCount = scannedCount.coerceAtLeast(1),
                 syncedRecord = prefs.getSyncedRecords()[titleId.uppercase()]
             )
         }
@@ -112,10 +118,15 @@ class EdenStorageRepositoryImpl @Inject constructor(
 
         for (source in orderedSources) {
             val uri = treeUriFor(source) ?: continue
-            val exported = if (source == LocalSaveSource.PEANUTS_NATIVE && ShizukuPeanutsClient.isShizukuUri(uri)) {
-                shizukuPeanutsClient.exportSaveToZip(titleId, destZipFile)
-            } else {
-                storageManager.exportTitleSaveToZip(uri, titleId, destZipFile, source)
+            val exported = try {
+                if (source == LocalSaveSource.PEANUTS_NATIVE && ShizukuPeanutsClient.isShizukuUri(uri)) {
+                    shizukuPeanutsClient.exportSaveToZip(titleId, destZipFile)
+                } else {
+                    storageManager.exportTitleSaveToZip(uri, titleId, destZipFile, source)
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                false
             }
             if (exported) return@withContext true
         }
@@ -145,10 +156,10 @@ class EdenStorageRepositoryImpl @Inject constructor(
                 } else {
                     storageManager.importTitleSaveFromZip(uri, titleId, srcZipFile, source)
                 }
-                if (ok) null else sourceLabel(source)
+                if (ok) null else MultiSourceStorageHelper.sourceLabel(source)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                "${sourceLabel(source)} (${e.message ?: "error de acceso"})"
+                "${MultiSourceStorageHelper.sourceLabel(source)} (${e.message ?: "error de acceso"})"
             }
             if (errorMsg != null) {
                 failedDetails.add(errorMsg)
@@ -182,8 +193,60 @@ class EdenStorageRepositoryImpl @Inject constructor(
         LocalSaveSource.EDEN -> prefs.edenTreeUri
         LocalSaveSource.PEANUTS_NATIVE -> prefs.peanutsTreeUri
     }
+}
 
-    private fun sourceLabel(source: LocalSaveSource): String = when (source) {
+internal object MultiSourceStorageHelper {
+
+    data class ScanOutcome(
+        val edenProfileId: String,
+        val saves: List<LocalSaveGame>,
+        val warningMessage: String?
+    )
+
+    suspend fun scanAllSources(
+        configuredSources: Set<LocalSaveSource>,
+        syncedRecords: Map<String, SyncedRecord>,
+        scanSource: suspend (LocalSaveSource) -> Pair<String, List<LocalSaveGame>>
+    ): ScanOutcome {
+        var edenProfileId = ""
+        val candidatesByTitle = mutableMapOf<String, MutableList<LocalSaveGame>>()
+        val warnings = mutableListOf<String>()
+        var succeededSources = 0
+
+        for (source in configuredSources) {
+            try {
+                val (profileId, saves) = scanSource(source)
+                succeededSources++
+                if (source == LocalSaveSource.EDEN && profileId.isNotBlank()) {
+                    edenProfileId = profileId
+                }
+                for (save in saves) {
+                    candidatesByTitle.getOrPut(save.titleId.uppercase()) { mutableListOf() }.add(save)
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                val detail = e.message?.takeIf { it.isNotBlank() } ?: "Error"
+                warnings.add("${sourceLabel(source)}: $detail")
+            }
+        }
+
+        val effectiveSourceCount = succeededSources.coerceAtLeast(1)
+        val merged = candidatesByTitle.mapNotNull { (titleId, candidates) ->
+            SaveReconciler.selectLatestLocalSave(
+                candidates = candidates,
+                configuredSourceCount = effectiveSourceCount,
+                syncedRecord = syncedRecords[titleId]
+            )
+        }.sortedByDescending { it.lastModifiedMs }
+
+        return ScanOutcome(
+            edenProfileId = edenProfileId,
+            saves = merged,
+            warningMessage = warnings.takeIf { it.isNotEmpty() }?.joinToString(" • ")
+        )
+    }
+
+    fun sourceLabel(source: LocalSaveSource): String = when (source) {
         LocalSaveSource.EDEN -> "Eden"
         LocalSaveSource.PEANUTS_NATIVE -> "Peanuts Native"
     }

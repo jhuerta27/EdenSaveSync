@@ -159,11 +159,14 @@ class EdenSyncViewModel @Inject constructor(
             _uiState.update { it.copy(isScanning = true) }
             try {
                 val (profileId, list) = scanGamesUseCase()
+                val scanWarning = storageRepository.consumeLastScanWarning()
                 _uiState.update { state ->
                     state.copy(
                         isScanning = false,
                         activeProfileId = profileId,
-                        games = list
+                        games = list,
+                        statusBannerMessage = scanWarning?.let(StringResource::invoke) ?: state.statusBannerMessage,
+                        isStatusError = if (scanWarning != null) true else state.isStatusError
                     )
                 }
             } catch (e: Exception) {

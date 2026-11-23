@@ -137,6 +137,9 @@
     <string name="msg_shizuku_not_installed">Shizuku is required to sync Peanuts Native on this device. Please install and start Shizuku first.</string>
     <string name="msg_shizuku_not_running">Shizuku is not running. Open the Shizuku app, start it (Wireless Debugging), and try again.</string>
     <string name="msg_shizuku_permission_denied">Shizuku permission was denied. Authorization is required to access Peanuts Native saves.</string>
+    <string name="msg_shizuku_permission_required">Shizuku permission is required to access Peanuts Native.</string>
+    <string name="msg_shizuku_bind_failed">Could not connect to the Shizuku service.</string>
+    <string name="msg_shizuku_external_cache_unavailable">External cache directory is unavailable for Shizuku file transfer.</string>
     <string name="msg_waiting_browser_auth">Waiting for Google authorization in browser...</string>
     <string name="msg_drive_connected">Google Drive account connected successfully!</string>
     <string name="msg_drive_auth_error">Error authorizing Google Drive</string>

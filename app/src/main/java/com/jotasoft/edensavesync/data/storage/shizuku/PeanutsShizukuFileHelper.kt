@@ -23,14 +23,10 @@ internal object PeanutsShizukuFileHelper {
     private val HEX_16_REGEX = Regex("^[0-9A-Fa-f]{16}$")
     private const val IO_BUFFER_SIZE = 32 * 1024
 
-    fun isDirectoryAccessible(savesDir: File): Boolean =
-        (savesDir.exists() && savesDir.isDirectory && savesDir.canRead()) ||
-            (savesDir.parentFile?.exists() == true && savesDir.parentFile?.canWrite() == true)
-
     fun scanSaves(savesDir: File): List<LocalSaveGame> {
         if (!savesDir.exists() || !savesDir.isDirectory) return emptyList()
         val children = savesDir.listFiles() ?: return emptyList()
-        val result = mutableListOf<LocalSaveGame>()
+        val savesByTitle = mutableMapOf<String, LocalSaveGame>()
 
         for (titleDir in children) {
             val titleName = titleDir.name.substringBefore(" (").trim().uppercase()
@@ -39,41 +35,56 @@ internal object PeanutsShizukuFileHelper {
             val stats = computeDirectoryStats(titleDir)
             if (stats.fileCount == 0) continue
 
-            result.add(
-                LocalSaveGame(
-                    titleId = titleName,
-                    userProfileId = "",
-                    lastModifiedMs = stats.lastModifiedMs,
-                    totalSizeBytes = stats.totalSizeBytes,
-                    fileCount = stats.fileCount,
-                    contentHash = stats.contentHash,
-                    source = LocalSaveSource.PEANUTS_NATIVE
-                )
+            val candidate = LocalSaveGame(
+                titleId = titleName,
+                userProfileId = "",
+                lastModifiedMs = stats.lastModifiedMs,
+                totalSizeBytes = stats.totalSizeBytes,
+                fileCount = stats.fileCount,
+                contentHash = stats.contentHash,
+                source = LocalSaveSource.PEANUTS_NATIVE
             )
+
+            val existing = savesByTitle[titleName]
+            if (existing == null || candidate.lastModifiedMs > existing.lastModifiedMs) {
+                savesByTitle[titleName] = candidate
+            }
         }
-        return result.sortedByDescending { it.lastModifiedMs }
+        return savesByTitle.values.sortedByDescending { it.lastModifiedMs }
     }
 
     fun scanSingleSave(savesDir: File, titleId: String): LocalSaveGame? {
         if (!savesDir.exists() || !savesDir.isDirectory) return null
         val normalized = titleId.uppercase()
-        val titleDir = findTitleDir(savesDir, normalized) ?: return null
-        val stats = computeDirectoryStats(titleDir)
-        if (stats.fileCount == 0) return null
+        var latest: LocalSaveGame? = null
 
-        return LocalSaveGame(
-            titleId = normalized,
-            userProfileId = "",
-            lastModifiedMs = stats.lastModifiedMs,
-            totalSizeBytes = stats.totalSizeBytes,
-            fileCount = stats.fileCount,
-            contentHash = stats.contentHash,
-            source = LocalSaveSource.PEANUTS_NATIVE
-        )
+        for (titleDir in findAllTitleDirs(savesDir, normalized)) {
+            val stats = computeDirectoryStats(titleDir)
+            if (stats.fileCount == 0) continue
+
+            val candidate = LocalSaveGame(
+                titleId = normalized,
+                userProfileId = "",
+                lastModifiedMs = stats.lastModifiedMs,
+                totalSizeBytes = stats.totalSizeBytes,
+                fileCount = stats.fileCount,
+                contentHash = stats.contentHash,
+                source = LocalSaveSource.PEANUTS_NATIVE
+            )
+            if (latest == null || candidate.lastModifiedMs > latest.lastModifiedMs) {
+                latest = candidate
+            }
+        }
+        return latest
     }
 
     fun exportTitleSaveToZip(savesDir: File, titleId: String, targetZipFile: File): Boolean {
-        val titleDir = findTitleDir(savesDir, titleId.uppercase()) ?: return false
+        val candidates = findAllTitleDirs(savesDir, titleId.uppercase())
+        val titleDir = when {
+            candidates.isEmpty() -> return false
+            candidates.size == 1 -> candidates.first()
+            else -> candidates.maxByOrNull { computeDirectoryStats(it).lastModifiedMs } ?: return false
+        }
         targetZipFile.parentFile?.mkdirs()
         if (targetZipFile.exists()) targetZipFile.delete()
 
@@ -93,35 +104,34 @@ internal object PeanutsShizukuFileHelper {
         val normalized = titleId.uppercase()
         if (!savesDir.exists() && !savesDir.mkdirs()) return false
 
-        savesDir.listFiles()?.forEach { child ->
-            if (child.isDirectory && child.name.startsWith("$normalized (", ignoreCase = true)) {
-                child.deleteRecursively()
-            }
-        }
+        // Extraer primero en un directorio temporal para no borrar la partida existente si el ZIP está corrupto o vacío
+        val stagingDir = File(savesDir, ".tmp_${normalized}_${System.currentTimeMillis()}")
+        if (!stagingDir.mkdirs()) return false
 
-        val targetTitleDir = findTitleDir(savesDir, normalized) ?: File(savesDir, normalized)
-        if (targetTitleDir.exists()) {
-            targetTitleDir.listFiles()?.forEach { it.deleteRecursively() }
-        } else if (!targetTitleDir.mkdirs()) {
-            return false
-        }
+        var extractedFiles = 0
+        try {
+            val canonicalStagingRoot = stagingDir.canonicalPath
+            val canonicalStagingPrefix = canonicalStagingRoot + File.separator
+            val buffer = ByteArray(IO_BUFFER_SIZE)
 
-        val canonicalRoot = targetTitleDir.canonicalPath
-        val buffer = ByteArray(IO_BUFFER_SIZE)
-
-        ZipInputStream(BufferedInputStream(FileInputStream(sourceZipFile))).use { zis ->
-            var entry: ZipEntry? = zis.nextEntry
-            while (entry != null) {
-                val cleanPath = entry.name.trimStart('/', '\\').replace('\\', '/')
-                if (cleanPath.isNotEmpty() && !cleanPath.contains("..")) {
-                    val entryPath = if (cleanPath.startsWith("$normalized/", ignoreCase = true)) {
-                        cleanPath.substring(normalized.length + 1)
-                    } else {
-                        cleanPath
-                    }
-                    if (entryPath.isNotEmpty()) {
-                        val outFile = File(targetTitleDir, entryPath)
-                        if (outFile.canonicalPath.startsWith(canonicalRoot)) {
+            ZipInputStream(BufferedInputStream(FileInputStream(sourceZipFile))).use { zis ->
+                var entry: ZipEntry? = zis.nextEntry
+                while (entry != null) {
+                    val cleanPath = entry.name.trimStart('/', '\\').replace('\\', '/')
+                    if (cleanPath.isNotEmpty()) {
+                        val entryPath = if (cleanPath.startsWith("$normalized/", ignoreCase = true)) {
+                            cleanPath.substring(normalized.length + 1)
+                        } else {
+                            cleanPath
+                        }
+                        if (entryPath.isNotEmpty()) {
+                            val outFile = File(stagingDir, entryPath)
+                            val canonicalOut = outFile.canonicalPath
+                            val isInsideStaging = canonicalOut == canonicalStagingRoot ||
+                                canonicalOut.startsWith(canonicalStagingPrefix)
+                            if (!isInsideStaging) {
+                                return false
+                            }
                             if (entry.isDirectory) {
                                 outFile.mkdirs()
                             } else {
@@ -136,15 +146,44 @@ internal object PeanutsShizukuFileHelper {
                                 if (entry.time > 0L) {
                                     outFile.setLastModified(entry.time)
                                 }
+                                extractedFiles++
                             }
                         }
                     }
+                    zis.closeEntry()
+                    entry = zis.nextEntry
                 }
-                zis.closeEntry()
-                entry = zis.nextEntry
+            }
+
+            if (extractedFiles == 0) {
+                return false
+            }
+
+            // Reemplazar la carpeta destino solo tras validar que la extracción fue íntegra
+            savesDir.listFiles()?.forEach { child ->
+                if (child.isDirectory && child.name.startsWith("$normalized (", ignoreCase = true)) {
+                    child.deleteRecursively()
+                }
+            }
+            val targetTitleDir = findTitleDir(savesDir, normalized) ?: File(savesDir, normalized)
+            if (targetTitleDir.exists() && !targetTitleDir.deleteRecursively()) {
+                return false
+            }
+            if (stagingDir.renameTo(targetTitleDir)) {
+                return true
+            }
+            // Fallback por si renameTo falla entre puntos de montaje
+            if (!stagingDir.copyRecursively(targetTitleDir, overwrite = true)) {
+                return false
+            }
+            return true
+        } catch (_: Exception) {
+            return false
+        } finally {
+            if (stagingDir.exists()) {
+                stagingDir.deleteRecursively()
             }
         }
-        return true
     }
 
     fun toJsonArray(saves: List<LocalSaveGame>): String = JSONArray().apply {
@@ -182,11 +221,16 @@ internal object PeanutsShizukuFileHelper {
 
     private fun findTitleDir(savesDir: File, normalizedTitleId: String): File? =
         savesDir.listFiles()?.firstOrNull {
+            it.isDirectory && it.name.equals(normalizedTitleId, ignoreCase = true)
+        }
+
+    private fun findAllTitleDirs(savesDir: File, normalizedTitleId: String): List<File> =
+        savesDir.listFiles()?.filter {
             it.isDirectory && (
                 it.name.equals(normalizedTitleId, ignoreCase = true) ||
                     it.name.startsWith("$normalizedTitleId (", ignoreCase = true)
                 )
-        }
+        }.orEmpty()
 
     private fun zipDirectory(
         dir: File,

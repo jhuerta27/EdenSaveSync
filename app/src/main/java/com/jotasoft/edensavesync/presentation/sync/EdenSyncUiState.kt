@@ -42,4 +42,7 @@ data class EdenSyncUiState(
 ) {
     val hasAnyLocalFolder: Boolean
         get() = edenFolderUri != null || peanutsFolderUri != null
+
+    val isPeanutsViaShizuku: Boolean
+        get() = peanutsFolderUri?.scheme.equals("shizuku", ignoreCase = true)
 }

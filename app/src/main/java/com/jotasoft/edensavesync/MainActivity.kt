@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: EdenSyncViewModel by viewModels()
     private val gamepadInputHandler = GamepadInputHandler()
+    private var cancelShizukuPermissionListener: (() -> Unit)? = null
     var onStartButtonHandler: (() -> Boolean)? = null
 
     override fun onNewIntent(intent: Intent) {
@@ -94,20 +95,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        cancelShizukuPermissionListener?.invoke()
+        cancelShizukuPermissionListener = null
+        super.onDestroy()
+    }
+
     private fun connectPeanutsWithShizuku() {
+        cancelShizukuPermissionListener?.invoke()
+        cancelShizukuPermissionListener = null
         when (shizukuPeanutsClient.checkStatus()) {
             ShizukuStatus.NOT_INSTALLED -> viewModel.showStatusError(R.string.msg_shizuku_not_installed)
             ShizukuStatus.NOT_RUNNING -> viewModel.showStatusError(R.string.msg_shizuku_not_running)
             ShizukuStatus.PERMISSION_REQUIRED -> {
-                shizukuPeanutsClient.requestPermission { granted ->
-                    runOnUiThread {
-                        if (granted) {
-                            viewModel.onFolderSelected(
-                                LocalSaveSource.PEANUTS_NATIVE,
-                                ShizukuPeanutsClient.SHIZUKU_PEANUTS_URI.toUri()
-                            )
-                        } else {
-                            viewModel.showStatusError(R.string.msg_shizuku_permission_denied)
+                val vm = viewModel
+                cancelShizukuPermissionListener = shizukuPeanutsClient.requestPermission { granted ->
+                    if (!isDestroyed && !isFinishing) {
+                        runOnUiThread {
+                            if (granted) {
+                                vm.onFolderSelected(
+                                    LocalSaveSource.PEANUTS_NATIVE,
+                                    ShizukuPeanutsClient.SHIZUKU_PEANUTS_URI.toUri()
+                                )
+                            } else {
+                                vm.showStatusError(R.string.msg_shizuku_permission_denied)
+                            }
                         }
                     }
                 }

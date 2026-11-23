@@ -76,7 +76,7 @@ import com.jotasoft.edensavesync.ui.theme.gamepadFocusable
 fun EdenSyncScreen(
     viewModel: EdenSyncViewModel,
     onOpenEdenFolderIntent: (useEdenProvider: Boolean) -> Intent,
-    onOpenPeanutsFolderIntent: (usePeanutsProvider: Boolean) -> Intent,
+    onOpenPeanutsFolderIntent: () -> Intent,
     onConnectPeanutsWithShizuku: () -> Unit,
     onOpenBrowserAuthUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -116,7 +116,7 @@ fun EdenSyncScreen(
         onPickFolderStandard = { source ->
             when (source) {
                 LocalSaveSource.EDEN -> edenFolderPickerLauncher.launch(onOpenEdenFolderIntent(false))
-                LocalSaveSource.PEANUTS_NATIVE -> peanutsFolderPickerLauncher.launch(onOpenPeanutsFolderIntent(false))
+                LocalSaveSource.PEANUTS_NATIVE -> peanutsFolderPickerLauncher.launch(onOpenPeanutsFolderIntent())
             }
         },
         onPickFolderProvider = { source ->
@@ -309,7 +309,7 @@ fun EdenSyncContent(
                 SetupStatusCard(
                     edenConnected = uiState.edenFolderUri != null,
                     peanutsConnected = uiState.peanutsFolderUri != null,
-                    peanutsViaShizuku = uiState.peanutsFolderUri?.scheme.equals("shizuku", ignoreCase = true),
+                    peanutsViaShizuku = uiState.isPeanutsViaShizuku,
                     activeProfileId = uiState.activeProfileId,
                     driveConnected = uiState.isGoogleDriveConnected,
                     onConfigureEdenClick = { activeFolderDialogSource = LocalSaveSource.EDEN },

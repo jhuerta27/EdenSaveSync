@@ -131,13 +131,10 @@ internal object SaveReconciler {
 
         if (base == SyncRecommendation.IN_SYNC &&
             local != null &&
+            remote != null &&
             !local.isMirroredAcrossAllConfiguredSources
         ) {
-            return if (remote != null) {
-                SyncRecommendation.DOWNLOAD_FROM_CLOUD
-            } else {
-                SyncRecommendation.UPLOAD_TO_CLOUD
-            }
+            return SyncRecommendation.DOWNLOAD_FROM_CLOUD
         }
         return base
     }
