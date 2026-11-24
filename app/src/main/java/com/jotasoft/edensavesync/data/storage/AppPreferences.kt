@@ -24,6 +24,20 @@ class AppPreferences @Inject constructor(
         const val OAUTH_REDIRECT_SCHEME =
             "com.googleusercontent.apps.870389828241-vs94oq1dpc02nljfj48m7hn9fm0tru3h"
         const val OAUTH_REDIRECT_URI = "$OAUTH_REDIRECT_SCHEME:/oauth2redirect"
+
+        fun resolveBackgroundSyncMode(
+            storedMode: String?,
+            isScheduledSyncEnabled: Boolean,
+            lastAutoSyncCheckMs: Long = 0L
+        ): BackgroundSyncMode = when (storedMode) {
+            BackgroundSyncMode.SCHEDULED.name -> BackgroundSyncMode.SCHEDULED
+            BackgroundSyncMode.AUTOMATIC.name -> BackgroundSyncMode.AUTOMATIC
+            else -> if (isScheduledSyncEnabled && lastAutoSyncCheckMs <= 0L) {
+                BackgroundSyncMode.SCHEDULED
+            } else {
+                BackgroundSyncMode.AUTOMATIC
+            }
+        }
     }
 
     private val prefs = context.getSharedPreferences("eden_save_sync_prefs", Context.MODE_PRIVATE)
@@ -101,11 +115,11 @@ class AppPreferences @Inject constructor(
         }
 
     var backgroundSyncMode: BackgroundSyncMode
-        get() = when (prefs.getString("background_sync_mode", null)) {
-            BackgroundSyncMode.SCHEDULED.name -> BackgroundSyncMode.SCHEDULED
-            BackgroundSyncMode.AUTOMATIC.name -> BackgroundSyncMode.AUTOMATIC
-            else -> BackgroundSyncMode.AUTOMATIC
-        }
+        get() = resolveBackgroundSyncMode(
+            storedMode = prefs.getString("background_sync_mode", null),
+            isScheduledSyncEnabled = isScheduledSyncEnabled,
+            lastAutoSyncCheckMs = lastAutoSyncCheckMs
+        )
         set(value) {
             prefs.edit { putString("background_sync_mode", value.name) }
         }
@@ -115,6 +129,25 @@ class AppPreferences @Inject constructor(
         set(value) {
             prefs.edit { putLong("last_auto_sync_check_ms", value) }
         }
+
+    var lastAutoErrorSignature: String
+        get() = prefs.getString("last_auto_error_signature", "").orEmpty()
+        set(value) {
+            prefs.edit { putString("last_auto_error_signature", value) }
+        }
+
+    var lastAutoErrorNotifiedAtMs: Long
+        get() = prefs.getLong("last_auto_error_notified_at_ms", 0L)
+        set(value) {
+            prefs.edit { putLong("last_auto_error_notified_at_ms", value) }
+        }
+
+    fun clearLastAutoErrorNotification() {
+        prefs.edit {
+            remove("last_auto_error_signature")
+                .remove("last_auto_error_notified_at_ms")
+        }
+    }
 
     var scheduledSyncHour: Int
         get() = prefs.getInt("scheduled_sync_hour", 4)

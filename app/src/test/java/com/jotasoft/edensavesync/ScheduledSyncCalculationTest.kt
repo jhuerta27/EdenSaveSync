@@ -1,6 +1,7 @@
 package com.jotasoft.edensavesync
 
 import com.jotasoft.edensavesync.data.scheduler.ScheduledSyncScheduler
+import com.jotasoft.edensavesync.data.storage.AppPreferences
 import com.jotasoft.edensavesync.domain.model.BackgroundSyncMode
 import com.jotasoft.edensavesync.domain.model.LocalSaveGame
 import com.jotasoft.edensavesync.domain.model.SyncSummaryResult
@@ -350,5 +351,141 @@ class ScheduledSyncCalculationTest {
                 summary = oneUploaded
             )
         )
+    }
+
+    @Test
+    fun shouldShowSyncNotification_inAutoMode_deduplicatesRepeatedErrorsWithinCooldown() {
+        val nowMs = 1_700_050_000_000L
+        val shizukuError = SyncSummaryResult(
+            uploadedCount = 0,
+            downloadedCount = 0,
+            skippedCount = 3,
+            errors = listOf("Peanuts Native: Shizuku no está iniciado")
+        )
+        val signature = ScheduledSyncScheduler.errorSignatureFor(shizukuError.errors)
+
+        // Primera vez que ocurre el error -> sí notifica
+        assertTrue(
+            ScheduledSyncScheduler.shouldShowSyncNotification(
+                mode = BackgroundSyncMode.AUTOMATIC,
+                notificationsEnabled = true,
+                summary = shizukuError,
+                lastNotifiedErrorSignature = "",
+                lastErrorNotifiedAtMs = 0L,
+                nowMs = nowMs
+            )
+        )
+
+        // Mismo error dentro de las 6 horas -> silenciado para evitar spam
+        assertFalse(
+            ScheduledSyncScheduler.shouldShowSyncNotification(
+                mode = BackgroundSyncMode.AUTOMATIC,
+                notificationsEnabled = true,
+                summary = shizukuError,
+                lastNotifiedErrorSignature = signature,
+                lastErrorNotifiedAtMs = nowMs - (30 * 60_000L),
+                nowMs = nowMs
+            )
+        )
+
+        // Mismo error una vez superado el cooldown de 6 horas -> vuelve a notificar
+        assertTrue(
+            ScheduledSyncScheduler.shouldShowSyncNotification(
+                mode = BackgroundSyncMode.AUTOMATIC,
+                notificationsEnabled = true,
+                summary = shizukuError,
+                lastNotifiedErrorSignature = signature,
+                lastErrorNotifiedAtMs = nowMs - ScheduledSyncScheduler.AUTO_ERROR_NOTIFICATION_COOLDOWN_MS,
+                nowMs = nowMs
+            )
+        )
+
+        // Error distinto dentro de las 6 horas -> sí notifica
+        val otherError = shizukuError.copy(errors = listOf("Google Drive: Network timeout"))
+        assertTrue(
+            ScheduledSyncScheduler.shouldShowSyncNotification(
+                mode = BackgroundSyncMode.AUTOMATIC,
+                notificationsEnabled = true,
+                summary = otherError,
+                lastNotifiedErrorSignature = signature,
+                lastErrorNotifiedAtMs = nowMs - (5 * 60_000L),
+                nowMs = nowMs
+            )
+        )
+
+        // Si además hubo cambios subidos/descargados junto con un error repetido -> sí notifica
+        val partialSuccess = shizukuError.copy(uploadedCount = 1)
+        assertTrue(
+            ScheduledSyncScheduler.shouldShowSyncNotification(
+                mode = BackgroundSyncMode.AUTOMATIC,
+                notificationsEnabled = true,
+                summary = partialSuccess,
+                lastNotifiedErrorSignature = signature,
+                lastErrorNotifiedAtMs = nowMs - (5 * 60_000L),
+                nowMs = nowMs
+            )
+        )
+    }
+
+    @Test
+    fun resolveBackgroundSyncMode_preservesScheduledForExistingUsersAndDefaultsAutoForNewUsers() {
+        // Usuario existente de v1.0.2 con sync programada ya activa (sin lastAutoSyncCheckMs) -> SCHEDULED
+        assertEquals(
+            BackgroundSyncMode.SCHEDULED,
+            AppPreferences.resolveBackgroundSyncMode(
+                storedMode = null,
+                isScheduledSyncEnabled = true,
+                lastAutoSyncCheckMs = 0L
+            )
+        )
+
+        // Usuario que ya tenía ejecuciones de auto-sync previas sin clave guardada -> AUTOMATIC
+        assertEquals(
+            BackgroundSyncMode.AUTOMATIC,
+            AppPreferences.resolveBackgroundSyncMode(
+                storedMode = null,
+                isScheduledSyncEnabled = true,
+                lastAutoSyncCheckMs = 1_700_000_000_000L
+            )
+        )
+
+        // Usuario nuevo (sync desactivada y sin clave) -> AUTOMATIC por defecto
+        assertEquals(
+            BackgroundSyncMode.AUTOMATIC,
+            AppPreferences.resolveBackgroundSyncMode(storedMode = null, isScheduledSyncEnabled = false)
+        )
+
+        // Valor explícitamente guardado siempre tiene prioridad
+        assertEquals(
+            BackgroundSyncMode.AUTOMATIC,
+            AppPreferences.resolveBackgroundSyncMode(
+                storedMode = BackgroundSyncMode.AUTOMATIC.name,
+                isScheduledSyncEnabled = true
+            )
+        )
+        assertEquals(
+            BackgroundSyncMode.SCHEDULED,
+            AppPreferences.resolveBackgroundSyncMode(
+                storedMode = BackgroundSyncMode.SCHEDULED.name,
+                isScheduledSyncEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun calculateAutoPulseIntervalMs_andWakeUp_adaptToDozeIdleMode() {
+        // Fuera de Doze (uso normal / recién bloqueado) -> 3 min con RTC_WAKEUP
+        assertEquals(
+            ScheduledSyncScheduler.AUTO_PULSE_INTERVAL_MS,
+            ScheduledSyncScheduler.calculateAutoPulseIntervalMs(isDeviceIdleMode = false)
+        )
+        assertTrue(ScheduledSyncScheduler.shouldWakeUpForAutoPulse(isDeviceIdleMode = false))
+
+        // En Doze (reposo profundo / nocturno) -> 15 min sin WAKEUP
+        assertEquals(
+            ScheduledSyncScheduler.AUTO_PULSE_IDLE_INTERVAL_MS,
+            ScheduledSyncScheduler.calculateAutoPulseIntervalMs(isDeviceIdleMode = true)
+        )
+        assertFalse(ScheduledSyncScheduler.shouldWakeUpForAutoPulse(isDeviceIdleMode = true))
     }
 }

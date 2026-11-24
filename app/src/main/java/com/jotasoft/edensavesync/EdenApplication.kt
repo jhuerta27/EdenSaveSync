@@ -22,6 +22,7 @@ class EdenApplication : Application() {
 
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
         }
         ContextCompat.registerReceiver(
@@ -29,6 +30,7 @@ class EdenApplication : Application() {
             object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
                     if (intent.action == Intent.ACTION_USER_PRESENT ||
+                        intent.action == Intent.ACTION_SCREEN_ON ||
                         intent.action == Intent.ACTION_SCREEN_OFF
                     ) {
                         scheduledSyncScheduler.enqueueAutoSyncFromEvent()

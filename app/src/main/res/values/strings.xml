@@ -16,7 +16,7 @@
     <string name="settings_sync_mode_label">Sync Mode</string>
     <string name="settings_sync_mode_auto">Automatic</string>
     <string name="settings_sync_mode_scheduled">Scheduled</string>
-    <string name="settings_sync_mode_auto_desc">Checks for changes periodically in the background and when locking, unlocking, or returning to the app, uploading stable saves and downloading newer cloud versions.</string>
+    <string name="settings_sync_mode_auto_desc">Checks for changes every ~3 min while the device is active and when locking, unlocking, or returning to the app, without waking the device overnight.</string>
     <string name="settings_sync_mode_scheduled_desc">Syncs all pending saves once a day at your chosen time.</string>
     <string name="settings_scheduled_time_title">Sync Time</string>
     <string name="settings_scheduled_time_dialog_title">Select Sync Time</string>

@@ -33,6 +33,9 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     fun onToggleScheduledSync(enabled: Boolean) {
+        if (enabled) {
+            appPreferences.backgroundSyncMode = _uiState.value.syncMode
+        }
         appPreferences.isScheduledSyncEnabled = enabled
         scheduledSyncScheduler.applyConfiguration(resetLastSyncDate = enabled)
         _uiState.update { it.copy(isScheduledSyncEnabled = enabled) }
@@ -64,6 +67,6 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun resolveAppVersion(): String = runCatching {
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.2"
-    }.getOrDefault("1.0.2")
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.3"
+    }.getOrDefault("1.0.3")
 }

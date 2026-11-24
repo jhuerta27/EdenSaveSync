@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -52,6 +53,7 @@ class ScheduledSyncScheduler @Inject constructor(
     companion object {
         const val WORK_NAME = "EdenScheduledSyncWork"
         const val EVENT_WORK_NAME = "EdenAutoSyncEventWork"
+        const val RETRY_WORK_NAME = "EdenAutoSyncRetryWork"
         const val ALARM_ACTION = "com.jotasoft.edensavesync.ACTION_SCHEDULED_SYNC"
         const val AUTO_ALARM_ACTION = "com.jotasoft.edensavesync.ACTION_AUTO_SYNC_PULSE"
         const val ALARM_REQUEST_CODE = 202611
@@ -59,7 +61,9 @@ class ScheduledSyncScheduler @Inject constructor(
         const val AUTO_UPLOAD_COOLDOWN_MS = 20_000L
         const val AUTO_EVENT_THROTTLE_MS = 30_000L
         const val AUTO_PULSE_INTERVAL_MS = 3 * 60_000L
+        const val AUTO_PULSE_IDLE_INTERVAL_MS = 15 * 60_000L
         const val AUTO_UNSTABLE_RETRY_DELAY_MS = 30_000L
+        const val AUTO_ERROR_NOTIFICATION_COOLDOWN_MS = 6 * 60 * 60 * 1000L
 
         fun calculateTargetTimeMs(
             targetHour: Int,
@@ -150,16 +154,39 @@ class ScheduledSyncScheduler @Inject constructor(
             minIntervalMs = minIntervalMs
         ) == 0L
 
+        fun calculateAutoPulseIntervalMs(isDeviceIdleMode: Boolean): Long =
+            if (isDeviceIdleMode) AUTO_PULSE_IDLE_INTERVAL_MS else AUTO_PULSE_INTERVAL_MS
+
+        fun shouldWakeUpForAutoPulse(isDeviceIdleMode: Boolean): Boolean = !isDeviceIdleMode
+
+        fun errorSignatureFor(errors: List<String>): String =
+            errors.joinToString("|") { it.trim() }.trim()
+
         fun shouldShowSyncNotification(
             mode: BackgroundSyncMode,
             notificationsEnabled: Boolean,
-            summary: SyncSummaryResult
+            summary: SyncSummaryResult,
+            lastNotifiedErrorSignature: String = "",
+            lastErrorNotifiedAtMs: Long = 0L,
+            nowMs: Long = System.currentTimeMillis(),
+            errorCooldownMs: Long = AUTO_ERROR_NOTIFICATION_COOLDOWN_MS
         ): Boolean {
             if (!notificationsEnabled) return false
             return when (mode) {
                 BackgroundSyncMode.SCHEDULED -> true
-                BackgroundSyncMode.AUTOMATIC ->
-                    summary.uploadedCount > 0 || summary.downloadedCount > 0 || summary.errors.isNotEmpty()
+                BackgroundSyncMode.AUTOMATIC -> {
+                    if (summary.uploadedCount > 0 || summary.downloadedCount > 0) {
+                        true
+                    } else if (summary.errors.isNotEmpty()) {
+                        val signature = errorSignatureFor(summary.errors)
+                        val isSameError = signature.isNotBlank() && signature == lastNotifiedErrorSignature
+                        val withinCooldown = lastErrorNotifiedAtMs > 0L &&
+                            nowMs - lastErrorNotifiedAtMs < errorCooldownMs
+                        !(isSameError && withinCooldown)
+                    } else {
+                        false
+                    }
+                }
             }
         }
     }
@@ -239,6 +266,7 @@ class ScheduledSyncScheduler @Inject constructor(
         val workManager = WorkManager.getInstance(context)
         workManager.cancelUniqueWork(WORK_NAME)
         workManager.cancelUniqueWork(EVENT_WORK_NAME)
+        workManager.cancelUniqueWork(RETRY_WORK_NAME)
     }
 
     private fun cancelDailyAlarmOnly() {
@@ -255,7 +283,7 @@ class ScheduledSyncScheduler @Inject constructor(
         pendingIntent.cancel()
     }
 
-    fun scheduleNextAutoPulseAlarm(intervalMs: Long = AUTO_PULSE_INTERVAL_MS) {
+    fun scheduleNextAutoPulseAlarm(intervalMs: Long? = null) {
         if (!appPreferences.isScheduledSyncEnabled ||
             appPreferences.backgroundSyncMode != BackgroundSyncMode.AUTOMATIC
         ) {
@@ -263,17 +291,27 @@ class ScheduledSyncScheduler @Inject constructor(
             return
         }
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val triggerAtMs = System.currentTimeMillis() + intervalMs
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val isDozeIdle = powerManager?.isDeviceIdleMode ?: false
+        val effectiveIntervalMs = intervalMs ?: calculateAutoPulseIntervalMs(isDeviceIdleMode = isDozeIdle)
+        val alarmType = if (shouldWakeUpForAutoPulse(isDeviceIdleMode = isDozeIdle)) {
+            AlarmManager.RTC_WAKEUP
+        } else {
+            AlarmManager.RTC
+        }
+        val triggerAtMs = System.currentTimeMillis() + effectiveIntervalMs
         val pendingIntent = buildAutoPulsePendingIntent()
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+        // En uso normal (fuera de Doze), usa RTC_WAKEUP cada 3 min para sincronizar con fiabilidad.
+        // En reposo profundo/nocturno (Doze), pasa a RTC sin WAKEUP cada 15 min para cuidar la batería.
         if (canExact) {
             runCatching {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pendingIntent)
+                alarmManager.setExactAndAllowWhileIdle(alarmType, triggerAtMs, pendingIntent)
             }.onFailure {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pendingIntent)
+                alarmManager.setAndAllowWhileIdle(alarmType, triggerAtMs, pendingIntent)
             }
         } else {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pendingIntent)
+            alarmManager.setAndAllowWhileIdle(alarmType, triggerAtMs, pendingIntent)
         }
     }
 
@@ -298,13 +336,15 @@ class ScheduledSyncScheduler @Inject constructor(
 
         scheduleOneTimeAutoSync(
             delayMs = delayMs,
-            policy = ExistingWorkPolicy.KEEP
+            policy = ExistingWorkPolicy.KEEP,
+            workName = EVENT_WORK_NAME
         )
     }
 
     private fun scheduleOneTimeAutoSync(
         delayMs: Long = 0L,
-        policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP
+        policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP,
+        workName: String = EVENT_WORK_NAME
     ) {
         if (!appPreferences.isScheduledSyncEnabled ||
             appPreferences.backgroundSyncMode != BackgroundSyncMode.AUTOMATIC
@@ -325,7 +365,7 @@ class ScheduledSyncScheduler @Inject constructor(
         }
 
         WorkManager.getInstance(context).enqueueUniqueWork(
-            EVENT_WORK_NAME,
+            workName,
             policy,
             requestBuilder.build()
         )
@@ -356,6 +396,7 @@ class ScheduledSyncScheduler @Inject constructor(
         if (resetLastSyncDate) {
             appPreferences.lastScheduledSyncDate = ""
             appPreferences.lastAutoSyncCheckMs = 0L
+            appPreferences.clearLastAutoErrorNotification()
         }
         if (!appPreferences.isScheduledSyncEnabled) {
             cancelDailySync()
@@ -371,19 +412,6 @@ class ScheduledSyncScheduler @Inject constructor(
                 workPolicy = ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE
             )
         }
-    }
-
-    suspend fun triggerAutoSyncOnEvent(nowMs: Long = System.currentTimeMillis()): Boolean {
-        if (!shouldRunEventAutoSync(
-                isEnabled = appPreferences.isScheduledSyncEnabled,
-                mode = appPreferences.backgroundSyncMode,
-                nowMs = nowMs,
-                lastCheckMs = appPreferences.lastAutoSyncCheckMs
-            )
-        ) {
-            return true
-        }
-        return executeAutoSyncCycle(nowMs = nowMs)
     }
 
     suspend fun executeScheduledSyncIfDue(requireExactTimeWindow: Boolean): Boolean {
@@ -439,16 +467,27 @@ class ScheduledSyncScheduler @Inject constructor(
             if (summary.deferredCount > 0) {
                 scheduleOneTimeAutoSync(
                     delayMs = AUTO_UNSTABLE_RETRY_DELAY_MS,
-                    policy = ExistingWorkPolicy.REPLACE
+                    policy = ExistingWorkPolicy.APPEND_OR_REPLACE,
+                    workName = RETRY_WORK_NAME
                 )
+            }
+            if (summary.errors.isEmpty()) {
+                appPreferences.clearLastAutoErrorNotification()
             }
             if (shouldShowSyncNotification(
                     mode = BackgroundSyncMode.AUTOMATIC,
                     notificationsEnabled = appPreferences.isScheduledSyncNotificationEnabled,
-                    summary = summary
+                    summary = summary,
+                    lastNotifiedErrorSignature = appPreferences.lastAutoErrorSignature,
+                    lastErrorNotifiedAtMs = appPreferences.lastAutoErrorNotifiedAtMs,
+                    nowMs = nowMs
                 )
             ) {
                 syncNotificationManager.showSyncResultNotification(summary)
+                if (summary.errors.isNotEmpty()) {
+                    appPreferences.lastAutoErrorSignature = errorSignatureFor(summary.errors)
+                    appPreferences.lastAutoErrorNotifiedAtMs = nowMs
+                }
             }
             return summary.errors.isEmpty()
         } finally {
