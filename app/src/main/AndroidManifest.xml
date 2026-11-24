@@ -68,6 +68,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.jotasoft.edensavesync.ACTION_SCHEDULED_SYNC" />
+                <action android:name="com.jotasoft.edensavesync.ACTION_AUTO_SYNC_PULSE" />
             </intent-filter>
         </receiver>
 

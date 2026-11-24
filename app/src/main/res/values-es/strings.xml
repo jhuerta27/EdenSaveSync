@@ -16,7 +16,7 @@
     <string name="settings_sync_mode_label">Modo de funcionamiento</string>
     <string name="settings_sync_mode_auto">Automático</string>
     <string name="settings_sync_mode_scheduled">Por hora</string>
-    <string name="settings_sync_mode_auto_desc">Detecta cambios al guardar partida para subirla automáticamente y descarga partidas nuevas de Drive al cambiar de dispositivo.</string>
+    <string name="settings_sync_mode_auto_desc">Comprueba cambios en segundo plano de forma periódica y al bloquear, desbloquear o volver a la app, subiendo guardados estables y descargando versiones nuevas de Drive.</string>
     <string name="settings_sync_mode_scheduled_desc">Sincroniza todas tus partidas pendientes una vez al día a la hora elegida.</string>
     <string name="settings_scheduled_time_title">Hora de sincronización</string>
     <string name="settings_scheduled_time_dialog_title">Seleccionar hora de sincronización</string>

@@ -2,18 +2,15 @@ package com.jotasoft.edensavesync.presentation.settings
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.jotasoft.edensavesync.data.scheduler.ScheduledSyncScheduler
 import com.jotasoft.edensavesync.data.storage.AppPreferences
 import com.jotasoft.edensavesync.domain.model.BackgroundSyncMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,9 +37,7 @@ class SettingsViewModel @Inject constructor(
         scheduledSyncScheduler.applyConfiguration(resetLastSyncDate = enabled)
         _uiState.update { it.copy(isScheduledSyncEnabled = enabled) }
         if (enabled && appPreferences.backgroundSyncMode == BackgroundSyncMode.AUTOMATIC) {
-            viewModelScope.launch(Dispatchers.IO) {
-                scheduledSyncScheduler.triggerAutoSyncOnEvent()
-            }
+            scheduledSyncScheduler.enqueueAutoSyncFromEvent()
         }
     }
 
@@ -52,9 +47,7 @@ class SettingsViewModel @Inject constructor(
         scheduledSyncScheduler.applyConfiguration(resetLastSyncDate = true)
         _uiState.update { it.copy(syncMode = mode) }
         if (appPreferences.isScheduledSyncEnabled && mode == BackgroundSyncMode.AUTOMATIC) {
-            viewModelScope.launch(Dispatchers.IO) {
-                scheduledSyncScheduler.triggerAutoSyncOnEvent()
-            }
+            scheduledSyncScheduler.enqueueAutoSyncFromEvent()
         }
     }
 

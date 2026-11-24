@@ -68,12 +68,17 @@ class SaveSyncRepositoryImpl @Inject constructor(
         }
 
         val (_, games) = scanGames()
+        val scanWarning = storageRepo.consumeLastScanWarning()
         val toUpload = games.filter { it.recommendation == SyncRecommendation.UPLOAD_TO_CLOUD }
         val toDownload = games.filter { it.recommendation == SyncRecommendation.DOWNLOAD_FROM_CLOUD }
 
         var uploaded = 0
         var downloaded = 0
+        var deferred = 0
         val errors = mutableListOf<String>()
+        if (!scanWarning.isNullOrBlank()) {
+            errors.add(scanWarning)
+        }
 
         for (item in toUpload) {
             val uploadTarget = if (ensureLocalStability) {
@@ -93,6 +98,7 @@ class SaveSyncRepositoryImpl @Inject constructor(
                         nowMs = System.currentTimeMillis()
                     )
                 ) {
+                    deferred++
                     continue
                 }
                 item.copy(localSave = recheckedLocal)
@@ -124,8 +130,9 @@ class SaveSyncRepositoryImpl @Inject constructor(
         SyncSummaryResult(
             uploadedCount = uploaded,
             downloadedCount = downloaded,
-            skippedCount = games.size - (uploaded + downloaded),
-            errors = errors
+            skippedCount = (games.size - (uploaded + downloaded + deferred)).coerceAtLeast(0),
+            errors = errors,
+            deferredCount = deferred
         )
     }
 

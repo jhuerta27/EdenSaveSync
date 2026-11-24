@@ -14,7 +14,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
             EntryPointAccessors.fromApplication(
                 context.applicationContext,
                 ScheduledSyncScheduler.SchedulerEntryPoint::class.java
-            ).scheduler().applyConfiguration()
+            ).scheduler().ensureScheduled()
         }
     }
 }

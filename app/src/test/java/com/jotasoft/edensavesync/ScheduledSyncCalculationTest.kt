@@ -197,23 +197,23 @@ class ScheduledSyncCalculationTest {
     fun shouldRunEventAutoSync_respectsModeAndThrottleInterval() {
         val nowMs = 1_700_000_200_000L
 
-        // Modo AUTOMATIC con más de 2 minutos desde el último chequeo -> true
+        // Modo AUTOMATIC con más de 30 segundos desde el último chequeo -> true
         assertTrue(
             ScheduledSyncScheduler.shouldRunEventAutoSync(
                 isEnabled = true,
                 mode = BackgroundSyncMode.AUTOMATIC,
                 nowMs = nowMs,
-                lastCheckMs = nowMs - 125_000L
+                lastCheckMs = nowMs - 35_000L
             )
         )
 
-        // Modo AUTOMATIC dentro de la ventana de 2 minutos -> false (throttled)
+        // Modo AUTOMATIC dentro de la ventana de 30 segundos -> false (throttled)
         assertFalse(
             ScheduledSyncScheduler.shouldRunEventAutoSync(
                 isEnabled = true,
                 mode = BackgroundSyncMode.AUTOMATIC,
                 nowMs = nowMs,
-                lastCheckMs = nowMs - 45_000L
+                lastCheckMs = nowMs - 10_000L
             )
         )
 
@@ -230,6 +230,62 @@ class ScheduledSyncCalculationTest {
         // Automatización desactivada -> false
         assertFalse(
             ScheduledSyncScheduler.shouldRunEventAutoSync(
+                isEnabled = false,
+                mode = BackgroundSyncMode.AUTOMATIC,
+                nowMs = nowMs,
+                lastCheckMs = 0L
+            )
+        )
+    }
+
+    @Test
+    fun calculateEventAutoSyncDelayMs_schedulesRemainingDelayInsteadOfDroppingEvent() {
+        val nowMs = 1_700_000_200_000L
+
+        // Primera ejecución o fuera de la ventana de 30s -> 0ms (inmediato)
+        assertEquals(
+            0L,
+            ScheduledSyncScheduler.calculateEventAutoSyncDelayMs(
+                isEnabled = true,
+                mode = BackgroundSyncMode.AUTOMATIC,
+                nowMs = nowMs,
+                lastCheckMs = 0L
+            )
+        )
+        assertEquals(
+            0L,
+            ScheduledSyncScheduler.calculateEventAutoSyncDelayMs(
+                isEnabled = true,
+                mode = BackgroundSyncMode.AUTOMATIC,
+                nowMs = nowMs,
+                lastCheckMs = nowMs - 35_000L
+            )
+        )
+
+        // Dentro de la ventana de 30s (10s transcurridos) -> programa el tiempo restante (20s)
+        assertEquals(
+            20_000L,
+            ScheduledSyncScheduler.calculateEventAutoSyncDelayMs(
+                isEnabled = true,
+                mode = BackgroundSyncMode.AUTOMATIC,
+                nowMs = nowMs,
+                lastCheckMs = nowMs - 10_000L
+            )
+        )
+
+        // Modo SCHEDULED o desactivado -> null (no encola trabajo)
+        assertEquals(
+            null,
+            ScheduledSyncScheduler.calculateEventAutoSyncDelayMs(
+                isEnabled = true,
+                mode = BackgroundSyncMode.SCHEDULED,
+                nowMs = nowMs,
+                lastCheckMs = 0L
+            )
+        )
+        assertEquals(
+            null,
+            ScheduledSyncScheduler.calculateEventAutoSyncDelayMs(
                 isEnabled = false,
                 mode = BackgroundSyncMode.AUTOMATIC,
                 nowMs = nowMs,
