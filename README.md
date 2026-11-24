@@ -44,6 +44,8 @@ Peanuts Native (`dev.nxnative.android.peanuts`) guarda las partidas en `Android/
 
 Repite estos 3 pasos en tu otro dispositivo Android con la misma cuenta de Google y tus partidas quedarán siempre sincronizadas.
 
+> 💡 **Recomendación para la sincronización automática en segundo plano:** en los ajustes de Android (*Ajustes → Aplicaciones → Eden Save Sync → Batería*), selecciona el modo **Sin restricciones** (*Unrestricted*). Así evitarás que el sistema (especialmente One UI en Samsung u otros modos de ahorro de batería) retrase o suspenda las sincronizaciones automáticas en segundo plano.
+
 ## ✨ Qué hace por ti
 
 - **☁️ Tu nube, tus partidas**: Guarda tus partidas comprimidas en una carpeta llamada `EdenSaveSync` dentro de **tu propio Google Drive**.
@@ -53,7 +55,7 @@ Repite estos 3 pasos en tu otro dispositivo Android con la misma cuenta de Googl
 - **🧠 Detecta automáticamente qué partida es más reciente**: Compara el contenido real (huella SHA-256) y la fecha de guardado para decirte qué conviene subir y qué conviene descargar.
 - **🔀 Compatible aunque cada dispositivo tenga un perfil distinto**: Cada instalación de Eden crea un identificador de perfil diferente; la app los adapta automáticamente al sincronizar para que el emulador reconozca tus partidas sin hacer nada manual.
 - **🛡️ Copias de seguridad automáticas antes de sobrescribir**: Antes de reemplazar una partida en tu dispositivo, guarda automáticamente un respaldo local (conserva los últimos 5 por juego) que puedes restaurar en 1 toque si lo necesitas.
-- **⏰ Sincronización automática diaria**: Desde **Ajustes (⚙️)** puedes elegir una hora al día para que la app sincronice tus partidas en segundo plano y te envíe una notificación con el resultado.
+- **⏰ Sincronización automática en segundo plano**: Desde **Ajustes (⚙️)** puedes activar el modo **Automático** (comprueba cambios aproximadamente cada **3 minutos** mientras el dispositivo está activo, además de al bloquear, desbloquear o volver a la app, sin despertar la CPU en reposo nocturno) o el modo **Por hora** (una vez al día a la hora elegida), con notificación opcional del resultado. Para máxima fiabilidad, se recomienda configurar la batería de la app como **Sin restricciones** en los ajustes de Android.
 - **🎮 Preparada para mando y pantalla táctil**: Navega cómodamente tanto con el dedo como con el D-pad / joysticks de tu consola portátil.
 - **📋 Nombres de juegos automáticos**: Reconoce los títulos automáticamente y además te permite renombrar cualquier juego a tu gusto.
 

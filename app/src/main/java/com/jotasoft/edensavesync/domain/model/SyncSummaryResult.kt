@@ -4,5 +4,6 @@ data class SyncSummaryResult(
     val uploadedCount: Int,
     val downloadedCount: Int,
     val skippedCount: Int,
-    val errors: List<String>
+    val errors: List<String>,
+    val deferredCount: Int = 0
 )

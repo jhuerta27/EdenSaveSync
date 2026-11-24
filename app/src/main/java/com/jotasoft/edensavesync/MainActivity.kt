@@ -13,6 +13,7 @@ import androidx.core.net.toUri
 import com.jotasoft.edensavesync.core.navigation.AppNavigation
 import com.jotasoft.edensavesync.data.device.GamepadInputHandler
 import com.jotasoft.edensavesync.data.device.GamepadScrollController
+import com.jotasoft.edensavesync.data.scheduler.ScheduledSyncScheduler
 import com.jotasoft.edensavesync.data.storage.EdenStorageManager
 import com.jotasoft.edensavesync.data.storage.shizuku.ShizukuPeanutsClient
 import com.jotasoft.edensavesync.data.storage.shizuku.ShizukuStatus
@@ -31,6 +32,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var shizukuPeanutsClient: ShizukuPeanutsClient
 
+    @Inject
+    lateinit var scheduledSyncScheduler: ScheduledSyncScheduler
+
     private val viewModel: EdenSyncViewModel by viewModels()
     private val gamepadInputHandler = GamepadInputHandler()
     private var cancelShizukuPermissionListener: (() -> Unit)? = null
@@ -45,6 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.onAppResumed()
+        scheduledSyncScheduler.enqueueAutoSyncFromEvent()
     }
 
     @SuppressLint("RestrictedApi")

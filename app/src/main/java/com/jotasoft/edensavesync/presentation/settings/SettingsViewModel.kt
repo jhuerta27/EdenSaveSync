@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import com.jotasoft.edensavesync.data.scheduler.ScheduledSyncScheduler
 import com.jotasoft.edensavesync.data.storage.AppPreferences
+import com.jotasoft.edensavesync.domain.model.BackgroundSyncMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,7 @@ class SettingsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         SettingsUiState(
             isScheduledSyncEnabled = appPreferences.isScheduledSyncEnabled,
+            syncMode = appPreferences.backgroundSyncMode,
             scheduledHour = appPreferences.scheduledSyncHour,
             scheduledMinute = appPreferences.scheduledSyncMinute,
             isNotificationEnabled = appPreferences.isScheduledSyncNotificationEnabled,
@@ -31,9 +33,25 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     fun onToggleScheduledSync(enabled: Boolean) {
+        if (enabled) {
+            appPreferences.backgroundSyncMode = _uiState.value.syncMode
+        }
         appPreferences.isScheduledSyncEnabled = enabled
         scheduledSyncScheduler.applyConfiguration(resetLastSyncDate = enabled)
         _uiState.update { it.copy(isScheduledSyncEnabled = enabled) }
+        if (enabled && appPreferences.backgroundSyncMode == BackgroundSyncMode.AUTOMATIC) {
+            scheduledSyncScheduler.enqueueAutoSyncFromEvent()
+        }
+    }
+
+    fun onSelectSyncMode(mode: BackgroundSyncMode) {
+        if (appPreferences.backgroundSyncMode == mode) return
+        appPreferences.backgroundSyncMode = mode
+        scheduledSyncScheduler.applyConfiguration(resetLastSyncDate = true)
+        _uiState.update { it.copy(syncMode = mode) }
+        if (appPreferences.isScheduledSyncEnabled && mode == BackgroundSyncMode.AUTOMATIC) {
+            scheduledSyncScheduler.enqueueAutoSyncFromEvent()
+        }
     }
 
     fun onToggleNotification(enabled: Boolean) {
@@ -49,6 +67,6 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun resolveAppVersion(): String = runCatching {
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.1"
-    }.getOrDefault("1.0.1")
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.3"
+    }.getOrDefault("1.0.3")
 }

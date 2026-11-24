@@ -7,6 +7,11 @@ import javax.inject.Inject
 class SyncAllRecommendedUseCase @Inject constructor(
     private val saveSyncRepository: SaveSyncRepository
 ) {
-    suspend operator fun invoke(onProgress: (String) -> Unit = {}): SyncSummaryResult =
-        saveSyncRepository.syncAllRecommended(onProgress)
+    suspend operator fun invoke(
+        ensureLocalStability: Boolean = false,
+        onProgress: (String) -> Unit = {}
+    ): SyncSummaryResult = saveSyncRepository.syncAllRecommended(
+        ensureLocalStability = ensureLocalStability,
+        onProgress = onProgress
+    )
 }

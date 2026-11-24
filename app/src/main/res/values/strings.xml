@@ -11,12 +11,17 @@
 
     <!-- Settings & Automation -->
     <string name="settings_automation_title">Automation</string>
-    <string name="settings_scheduled_sync_title">Scheduled Daily Sync</string>
-    <string name="settings_scheduled_sync_desc">Automatically syncs pending saves once a day in the background.</string>
+    <string name="settings_scheduled_sync_title">Background Auto-Sync</string>
+    <string name="settings_scheduled_sync_desc">Automatically syncs pending saves with Google Drive in the background.</string>
+    <string name="settings_sync_mode_label">Sync Mode</string>
+    <string name="settings_sync_mode_auto">Automatic</string>
+    <string name="settings_sync_mode_scheduled">Scheduled</string>
+    <string name="settings_sync_mode_auto_desc">Checks for changes every ~3 min while the device is active and when locking, unlocking, or returning to the app, without waking the device overnight.</string>
+    <string name="settings_sync_mode_scheduled_desc">Syncs all pending saves once a day at your chosen time.</string>
     <string name="settings_scheduled_time_title">Sync Time</string>
     <string name="settings_scheduled_time_dialog_title">Select Sync Time</string>
     <string name="settings_scheduled_sync_notify">Notify sync result</string>
-    <string name="settings_scheduled_sync_notify_desc">Receive a notification when the scheduled sync completes.</string>
+    <string name="settings_scheduled_sync_notify_desc">Receive a notification when background sync applies changes or encounters issues.</string>
     <string name="settings_about_title">About</string>
     <string name="settings_version">Version %1$s</string>
 

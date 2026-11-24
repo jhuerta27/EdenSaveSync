@@ -17,7 +17,12 @@ class ScheduledSyncReceiver : BroadcastReceiver() {
             ScheduledSyncScheduler.SchedulerEntryPoint::class.java
         ).scheduler()
 
-        scheduler.applyConfiguration()
+        if (intent.action == ScheduledSyncScheduler.AUTO_ALARM_ACTION) {
+            scheduler.handleAutoPulseAlarm()
+            return
+        }
+
+        scheduler.ensureScheduled()
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
